@@ -1,0 +1,6 @@
+{
+  "name": "AutoManager",
+  "description": "Sistema de gestión integral para compraventa de vehículos con CRM, inventario, ventas y caja.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
