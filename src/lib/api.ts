@@ -1,8 +1,9 @@
-import { auth } from './firebase';
+import { auth } from './auth';
 import { Vehicle, Customer, Sale, Expense } from '../types';
 
 async function getHeaders() {
-  const token = await auth.currentUser?.getIdToken();
+  const user = auth.currentUser;
+  const token = user ? btoa(JSON.stringify(user)) : '';
   return {
     'Content-Type': 'application/json',
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),

@@ -5,6 +5,7 @@ import { eq, and } from 'drizzle-orm';
 import { db } from './src/db/index.ts';
 import { vehicles, customers, customerInteractions, sales, expenses } from './src/db/schema.ts';
 import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
+import { cloudSqlService } from './src/services/cloudSqlService.ts';
 
 // Seeding function to populate user's database with high-quality sample data if empty
 async function seedUserData(userId: number) {
@@ -153,9 +154,8 @@ async function startServer() {
       // Trigger automatic background seeding if empty
       await seedUserData(userId);
 
-      const list = await db.select().from(vehicles).where(eq(vehicles.userId, userId));
-      // Map to string id for compatibility with existing components
-      res.json(list.map(v => ({ ...v, id: v.id.toString() })));
+      const list = await cloudSqlService.vehicles.listByUserId(userId);
+      res.json(list);
     } catch (error: any) {
       console.error("Failed to fetch vehicles:", error);
       res.status(500).json({ error: error.message || "Failed to fetch vehicles" });
@@ -165,11 +165,8 @@ async function startServer() {
   app.post("/api/vehicles", requireAuth, async (req: AuthRequest, res) => {
     try {
       const userId = req.dbUser!.id;
-      const [newVehicle] = await db.insert(vehicles).values({
-        ...req.body,
-        userId,
-      }).returning();
-      res.status(201).json({ ...newVehicle, id: newVehicle.id.toString() });
+      const newVehicle = await cloudSqlService.vehicles.create(userId, req.body);
+      res.status(201).json(newVehicle);
     } catch (error: any) {
       console.error("Failed to create vehicle:", error);
       res.status(500).json({ error: error.message || "Failed to create vehicle" });
@@ -184,10 +181,7 @@ async function startServer() {
         return res.status(400).json({ error: "Invalid vehicle ID" });
       }
 
-      await db.update(vehicles)
-        .set(req.body)
-        .where(and(eq(vehicles.id, vehicleId), eq(vehicles.userId, userId)));
-
+      await cloudSqlService.vehicles.update(userId, vehicleId, req.body);
       res.json({ success: true });
     } catch (error: any) {
       console.error("Failed to update vehicle:", error);
@@ -203,9 +197,7 @@ async function startServer() {
         return res.status(400).json({ error: "Invalid vehicle ID" });
       }
 
-      await db.delete(vehicles)
-        .where(and(eq(vehicles.id, vehicleId), eq(vehicles.userId, userId)));
-
+      await cloudSqlService.vehicles.delete(userId, vehicleId);
       res.json({ success: true });
     } catch (error: any) {
       console.error("Failed to delete vehicle:", error);
@@ -323,8 +315,8 @@ async function startServer() {
   app.get("/api/sales", requireAuth, async (req: AuthRequest, res) => {
     try {
       const userId = req.dbUser!.id;
-      const list = await db.select().from(sales).where(eq(sales.userId, userId));
-      res.json(list.map(s => ({ ...s, id: s.id.toString() })));
+      const list = await cloudSqlService.sales.listByUserId(userId);
+      res.json(list);
     } catch (error: any) {
       console.error("Failed to fetch sales:", error);
       res.status(500).json({ error: error.message || "Failed to fetch sales" });
@@ -334,11 +326,8 @@ async function startServer() {
   app.post("/api/sales", requireAuth, async (req: AuthRequest, res) => {
     try {
       const userId = req.dbUser!.id;
-      const [newSale] = await db.insert(sales).values({
-        ...req.body,
-        userId,
-      }).returning();
-      res.status(201).json({ ...newSale, id: newSale.id.toString() });
+      const newSale = await cloudSqlService.sales.create(userId, req.body);
+      res.status(201).json(newSale);
     } catch (error: any) {
       console.error("Failed to create sale:", error);
       res.status(500).json({ error: error.message || "Failed to create sale" });

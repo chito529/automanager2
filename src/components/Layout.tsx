@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSettings } from '@/contexts/SettingsContext';
-import { auth, signOut } from '../lib/firebase';
+import { auth } from '../lib/auth';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -27,7 +27,7 @@ export default function Layout() {
   const user = auth.currentUser;
 
   const handleSignOut = () => {
-    signOut(auth);
+    auth.signOut();
   };
 
   const getInitials = (name: string | null) => {

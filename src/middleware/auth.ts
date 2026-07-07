@@ -1,11 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
-import { adminAuth } from '../lib/firebase-admin.ts';
 import { db } from '../db/index.ts';
 import { users } from '../db/schema.ts';
-import { DecodedIdToken } from 'firebase-admin/auth';
+
+export interface DecodedCustomUser {
+  uid: string;
+  email: string;
+  displayName: string | null;
+}
 
 export interface AuthRequest extends Request {
-  user?: DecodedIdToken;
+  user?: DecodedCustomUser;
   dbUser?: typeof users.$inferSelect;
 }
 
@@ -43,17 +47,23 @@ export const requireAuth = async (
 
   const token = authHeader.split('Bearer ')[1];
   try {
-    const decodedToken = await adminAuth.verifyIdToken(token);
-    req.user = decodedToken;
+    // Decode the custom base64 token (which represents custom user details)
+    const decodedStr = Buffer.from(token, 'base64').toString('utf8');
+    const decodedUser = JSON.parse(decodedStr) as DecodedCustomUser;
+
+    if (!decodedUser || !decodedUser.uid || !decodedUser.email) {
+      throw new Error('Invalid token format');
+    }
+
+    req.user = decodedUser;
 
     // Get or create database user record
-    const email = decodedToken.email || 'no-email@user.com';
-    const dbUser = await getOrCreateUser(decodedToken.uid, email);
+    const dbUser = await getOrCreateUser(decodedUser.uid, decodedUser.email);
     req.dbUser = dbUser;
 
     next();
   } catch (error) {
-    console.error('Error verifying Firebase ID token:', error);
+    console.error('Error decoding custom token:', error);
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });
   }
 };
