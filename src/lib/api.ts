@@ -1,20 +1,17 @@
+import { 
+  collection, 
+  getDocs, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc 
+} from 'firebase/firestore';
+import { db } from './firebase';
 import { Vehicle, Customer, Sale, Expense } from '../types';
 
-// Helper to delay response for realism and compatibility with React loading states
-const delay = (ms: number = 300) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Key constants for local storage
-const KEYS = {
-  VEHICLES: 'automanager_vehicles',
-  CUSTOMERS: 'automanager_customers',
-  SALES: 'automanager_sales',
-  EXPENSES: 'automanager_expenses',
-};
-
 // Seed Data
-const initialVehicles: Vehicle[] = [
+const initialVehicles: Omit<Vehicle, 'id'>[] = [
   {
-    id: 'v1',
     brand: 'Toyota',
     model: 'Hilux CD 4x4',
     year: 2018,
@@ -27,7 +24,6 @@ const initialVehicles: Vehicle[] = [
     salePrice: 170000000,
   },
   {
-    id: 'v2',
     brand: 'Hyundai',
     model: 'Tucson GL',
     year: 2017,
@@ -40,7 +36,6 @@ const initialVehicles: Vehicle[] = [
     salePrice: 0,
   },
   {
-    id: 'v3',
     brand: 'Chevrolet',
     model: 'Onix LTZ',
     year: 2020,
@@ -54,9 +49,8 @@ const initialVehicles: Vehicle[] = [
   }
 ];
 
-const initialCustomers: Customer[] = [
+const initialCustomers: Omit<Customer, 'id'>[] = [
   {
-    id: 'c1',
     name: 'Carlos Mendoza',
     phone: '+595 981 123456',
     email: 'carlos.mendoza@gmail.com',
@@ -75,7 +69,6 @@ const initialCustomers: Customer[] = [
     ]
   },
   {
-    id: 'c2',
     name: 'María Esquivel',
     phone: '+595 971 789012',
     email: 'maria.esquivel@outlook.com',
@@ -95,9 +88,8 @@ const initialCustomers: Customer[] = [
   }
 ];
 
-const initialSales: Sale[] = [
+const initialSales: Omit<Sale, 'id'>[] = [
   {
-    id: 's1',
     date: '2026-06-29',
     vehicleId: 'v3',
     customerId: 'c2',
@@ -110,9 +102,8 @@ const initialSales: Sale[] = [
   }
 ];
 
-const initialExpenses: Expense[] = [
+const initialExpenses: Omit<Expense, 'id'>[] = [
   {
-    id: 'e1',
     vehicleId: 'v2',
     type: 'Mantenimiento',
     description: 'Cambio de pastillas de freno y aceite de motor',
@@ -121,7 +112,6 @@ const initialExpenses: Expense[] = [
     date: '2026-06-25',
   },
   {
-    id: 'e2',
     vehicleId: 'v1',
     type: 'Estética',
     description: 'Lavado premium y pulido de carrocería',
@@ -131,103 +121,97 @@ const initialExpenses: Expense[] = [
   }
 ];
 
-// Helper functions for local storage operations
-const getStored = <T>(key: string, defaultData: T[]): T[] => {
-  const data = localStorage.getItem(key);
-  if (!data) {
-    localStorage.setItem(key, JSON.stringify(defaultData));
-    return defaultData;
-  }
-  return JSON.parse(data);
-};
-
-const setStored = <T>(key: string, data: T[]) => {
-  localStorage.setItem(key, JSON.stringify(data));
-};
-
 export const api = {
   vehicles: {
-    list: async () => {
-      await delay();
-      return getStored<Vehicle>(KEYS.VEHICLES, initialVehicles);
+    list: async (): Promise<Vehicle[]> => {
+      const colRef = collection(db, 'vehicles');
+      const snapshot = await getDocs(colRef);
+      if (snapshot.empty) {
+        const list: Vehicle[] = [];
+        for (const item of initialVehicles) {
+          const docRef = await addDoc(colRef, item);
+          list.push({ id: docRef.id, ...item });
+        }
+        return list;
+      }
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Vehicle));
     },
     create: async (data: Omit<Vehicle, 'id'>) => {
-      await delay();
-      const list = getStored<Vehicle>(KEYS.VEHICLES, initialVehicles);
-      const newId = 'v_' + Math.random().toString(36).substr(2, 9);
-      const newVehicle: Vehicle = { id: newId, ...data };
-      list.push(newVehicle);
-      setStored(KEYS.VEHICLES, list);
-      return newId;
+      const colRef = collection(db, 'vehicles');
+      const docRef = await addDoc(colRef, data);
+      return docRef.id;
     },
     update: async (id: string, data: Partial<Vehicle>) => {
-      await delay();
-      const list = getStored<Vehicle>(KEYS.VEHICLES, initialVehicles);
-      const index = list.findIndex(v => v.id === id);
-      if (index !== -1) {
-        list[index] = { ...list[index], ...data };
-        setStored(KEYS.VEHICLES, list);
-      }
+      const docRef = doc(db, 'vehicles', id);
+      await updateDoc(docRef, data);
     },
     delete: async (id: string) => {
-      await delay();
-      const list = getStored<Vehicle>(KEYS.VEHICLES, initialVehicles);
-      const filtered = list.filter(v => v.id !== id);
-      setStored(KEYS.VEHICLES, filtered);
+      const docRef = doc(db, 'vehicles', id);
+      await deleteDoc(docRef);
     }
   },
   customers: {
-    list: async () => {
-      await delay();
-      return getStored<Customer>(KEYS.CUSTOMERS, initialCustomers);
+    list: async (): Promise<Customer[]> => {
+      const colRef = collection(db, 'customers');
+      const snapshot = await getDocs(colRef);
+      if (snapshot.empty) {
+        const list: Customer[] = [];
+        for (const item of initialCustomers) {
+          const docRef = await addDoc(colRef, item);
+          list.push({ id: docRef.id, ...item });
+        }
+        return list;
+      }
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
     },
     create: async (data: Omit<Customer, 'id'>) => {
-      await delay();
-      const list = getStored<Customer>(KEYS.CUSTOMERS, initialCustomers);
-      const newId = 'c_' + Math.random().toString(36).substr(2, 9);
-      const newCustomer: Customer = { id: newId, ...data };
-      list.push(newCustomer);
-      setStored(KEYS.CUSTOMERS, list);
-      return newId;
+      const colRef = collection(db, 'customers');
+      const docRef = await addDoc(colRef, data);
+      return docRef.id;
     },
     update: async (id: string, data: Partial<Customer>) => {
-      await delay();
-      const list = getStored<Customer>(KEYS.CUSTOMERS, initialCustomers);
-      const index = list.findIndex(c => c.id === id);
-      if (index !== -1) {
-        list[index] = { ...list[index], ...data };
-        setStored(KEYS.CUSTOMERS, list);
-      }
+      const docRef = doc(db, 'customers', id);
+      await updateDoc(docRef, data);
     }
   },
   sales: {
-    list: async () => {
-      await delay();
-      return getStored<Sale>(KEYS.SALES, initialSales);
+    list: async (): Promise<Sale[]> => {
+      const colRef = collection(db, 'sales');
+      const snapshot = await getDocs(colRef);
+      if (snapshot.empty) {
+        const list: Sale[] = [];
+        for (const item of initialSales) {
+          const docRef = await addDoc(colRef, item);
+          list.push({ id: docRef.id, ...item });
+        }
+        return list;
+      }
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale));
     },
     create: async (data: Omit<Sale, 'id'>) => {
-      await delay();
-      const list = getStored<Sale>(KEYS.SALES, initialSales);
-      const newId = 's_' + Math.random().toString(36).substr(2, 9);
-      const newSale: Sale = { id: newId, ...data };
-      list.push(newSale);
-      setStored(KEYS.SALES, list);
-      return newId;
+      const colRef = collection(db, 'sales');
+      const docRef = await addDoc(colRef, data);
+      return docRef.id;
     }
   },
   expenses: {
-    list: async () => {
-      await delay();
-      return getStored<Expense>(KEYS.EXPENSES, initialExpenses);
+    list: async (): Promise<Expense[]> => {
+      const colRef = collection(db, 'expenses');
+      const snapshot = await getDocs(colRef);
+      if (snapshot.empty) {
+        const list: Expense[] = [];
+        for (const item of initialExpenses) {
+          const docRef = await addDoc(colRef, item);
+          list.push({ id: docRef.id, ...item });
+        }
+        return list;
+      }
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense));
     },
     create: async (data: Omit<Expense, 'id'>) => {
-      await delay();
-      const list = getStored<Expense>(KEYS.EXPENSES, initialExpenses);
-      const newId = 'e_' + Math.random().toString(36).substr(2, 9);
-      const newExpense: Expense = { id: newId, ...data };
-      list.push(newExpense);
-      setStored(KEYS.EXPENSES, list);
-      return newId;
+      const colRef = collection(db, 'expenses');
+      const docRef = await addDoc(colRef, data);
+      return docRef.id;
     }
   }
 };

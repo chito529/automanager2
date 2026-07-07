@@ -2,10 +2,11 @@ import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, CarFront, FileText, Users, ShoppingCart, 
-  ArrowLeftRight, Wallet, Receipt, Bell, BarChart3
+  ArrowLeftRight, Wallet, Receipt, Bell, BarChart3, LogOut
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSettings } from '@/contexts/SettingsContext';
+import { auth, signOut } from '../lib/firebase';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -23,6 +24,20 @@ const navigation = [
 export default function Layout() {
   const location = useLocation();
   const { currency, setCurrency } = useSettings();
+  const user = auth.currentUser;
+
+  const handleSignOut = () => {
+    signOut(auth);
+  };
+
+  const getInitials = (name: string | null) => {
+    if (!name) return 'U';
+    const parts = name.split(' ');
+    if (parts.length > 1) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 font-sans flex overflow-hidden">
@@ -64,13 +79,18 @@ export default function Layout() {
           <div className="flex items-center justify-between px-3">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-xs font-bold text-indigo-400">
-                JA
+                {getInitials(user?.displayName || user?.email || 'JA')}
               </div>
               <div className="overflow-hidden">
-                <p className="text-xs font-semibold truncate text-slate-200">Juan Admin</p>
+                <p className="text-xs font-semibold truncate text-slate-200" title={user?.displayName || user?.email || 'Juan Admin'}>
+                  {user?.displayName || user?.email?.split('@')[0] || 'Juan Admin'}
+                </p>
                 <p className="text-[10px] text-slate-500">Administrador</p>
               </div>
             </div>
+            <button onClick={handleSignOut} className="text-slate-500 hover:text-red-400 transition-colors cursor-pointer" title="Cerrar sesión">
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </div>
