@@ -2,11 +2,9 @@ import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, CarFront, FileText, Users, ShoppingCart, 
-  ArrowLeftRight, Wallet, Receipt, Bell, BarChart3, LogOut
+  ArrowLeftRight, Wallet, Receipt, Bell, BarChart3
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { auth } from '@/lib/firebase';
-import { signOut } from 'firebase/auth';
 import { useSettings } from '@/contexts/SettingsContext';
 
 const navigation = [
@@ -24,17 +22,7 @@ const navigation = [
 
 export default function Layout() {
   const location = useLocation();
-  const user = auth.currentUser;
   const { currency, setCurrency } = useSettings();
-  
-  const handleSignOut = () => {
-    signOut(auth);
-  };
-
-  const getInitials = (name: string | null) => {
-    if (!name) return 'U';
-    return name.substring(0, 2).toUpperCase();
-  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 font-sans flex overflow-hidden">
@@ -75,17 +63,14 @@ export default function Layout() {
         <div className="p-4 mt-auto border-t border-slate-800">
           <div className="flex items-center justify-between px-3">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-white">
-                {getInitials(user?.displayName || user?.email)}
+              <div className="w-8 h-8 rounded-full bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-xs font-bold text-indigo-400">
+                JA
               </div>
               <div className="overflow-hidden">
-                <p className="text-xs font-semibold truncate text-slate-200">{user?.displayName || user?.email || 'Usuario'}</p>
+                <p className="text-xs font-semibold truncate text-slate-200">Juan Admin</p>
                 <p className="text-[10px] text-slate-500">Administrador</p>
               </div>
             </div>
-            <button onClick={handleSignOut} className="text-slate-500 hover:text-red-400 transition-colors">
-              <LogOut className="h-4 w-4" />
-            </button>
           </div>
         </div>
       </div>

@@ -3,10 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User } from 'firebase/auth';
-import { auth } from './lib/firebase';
+import React from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Vehicles from './pages/Vehicles';
@@ -17,56 +15,7 @@ import GenericPage from './components/GenericPage';
 
 import { SettingsProvider } from './contexts/SettingsContext';
 
-function Login() {
-  const handleLogin = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error('Error signing in', error);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-800 p-8 rounded-xl shadow-lg max-w-sm w-full text-center">
-        <h1 className="text-2xl font-bold text-slate-200 mb-2">AutoManager</h1>
-        <p className="text-slate-400 mb-6 text-sm">Business Manager</p>
-        <button
-          onClick={handleLogin}
-          className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 px-4 rounded-lg transition-colors"
-        >
-          Sign in with Google
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-indigo-500">Loading...</div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Login />;
-  }
-
   return (
     <SettingsProvider>
       <BrowserRouter>
