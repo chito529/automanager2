@@ -8,9 +8,9 @@ type AuthStateCallback = (user: AuthUser | null) => void;
 const listeners = new Set<AuthStateCallback>();
 
 const defaultUser: AuthUser = {
-  uid: 'uid_anVhbmFsbWlyb241MjlAZ21haWwuY29t', // Base64 encoding of juanalmiron529@gmail.com
-  email: 'juanalmiron529@gmail.com',
-  displayName: 'Juan Almirón',
+  uid: 'uid_public_default',
+  email: 'public@automanager.com',
+  displayName: 'Público',
 };
 
 let currentUser: AuthUser | null = defaultUser;
@@ -39,7 +39,7 @@ export const auth = {
     listeners.forEach(cb => cb(user));
   },
   signOut() {
-    // For direct access, sign out will just keep the default user logged in or reset to default
+    // Keep it on public mode
     currentUser = defaultUser;
     listeners.forEach(cb => cb(defaultUser));
   }

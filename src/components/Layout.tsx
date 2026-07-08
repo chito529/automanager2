@@ -75,23 +75,10 @@ export default function Layout() {
             );
           })}
         </nav>
-        <div className="p-4 mt-auto border-t border-slate-800">
-          <div className="flex items-center justify-between px-3">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-xs font-bold text-indigo-400">
-                {getInitials(user?.displayName || user?.email || 'JA')}
-              </div>
-              <div className="overflow-hidden">
-                <p className="text-xs font-semibold truncate text-slate-200" title={user?.displayName || user?.email || 'Juan Admin'}>
-                  {user?.displayName || user?.email?.split('@')[0] || 'Juan Admin'}
-                </p>
-                <p className="text-[10px] text-slate-500">Administrador</p>
-              </div>
-            </div>
-            <button onClick={handleSignOut} className="text-slate-500 hover:text-red-400 transition-colors cursor-pointer" title="Cerrar sesión">
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
+        <div className="p-4 mt-auto border-t border-slate-800/50 text-center">
+          <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-widest bg-slate-950 px-2 py-1.5 rounded-full border border-slate-800/60 inline-block w-full">
+            Acceso Público
+          </span>
         </div>
       </div>
 
