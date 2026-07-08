@@ -7,14 +7,13 @@ export interface AuthUser {
 type AuthStateCallback = (user: AuthUser | null) => void;
 const listeners = new Set<AuthStateCallback>();
 
-let currentUser: AuthUser | null = (() => {
-  try {
-    const saved = localStorage.getItem('automanager_session');
-    return saved ? JSON.parse(saved) : null;
-  } catch {
-    return null;
-  }
-})();
+const defaultUser: AuthUser = {
+  uid: 'uid_anVhbmFsbWlyb241MjlAZ21haWwuY29t', // Base64 encoding of juanalmiron529@gmail.com
+  email: 'juanalmiron529@gmail.com',
+  displayName: 'Juan Almirón',
+};
+
+let currentUser: AuthUser | null = defaultUser;
 
 export const auth = {
   get currentUser() {
@@ -22,7 +21,7 @@ export const auth = {
   },
   onAuthStateChanged(callback: AuthStateCallback) {
     listeners.add(callback);
-    // Initial sync callback
+    // Initial sync callback with the default user
     callback(currentUser);
     return () => {
       listeners.delete(callback);
@@ -37,12 +36,12 @@ export const auth = {
       displayName: displayName || email.split('@')[0],
     };
     currentUser = user;
-    localStorage.setItem('automanager_session', JSON.stringify(user));
     listeners.forEach(cb => cb(user));
   },
   signOut() {
-    currentUser = null;
-    localStorage.removeItem('automanager_session');
-    listeners.forEach(cb => cb(null));
+    // For direct access, sign out will just keep the default user logged in or reset to default
+    currentUser = defaultUser;
+    listeners.forEach(cb => cb(defaultUser));
   }
 };
+
