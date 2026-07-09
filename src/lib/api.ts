@@ -3,7 +3,7 @@ import { Vehicle, Customer, Sale, Expense } from '../types';
 
 async function getHeaders() {
   const user = auth.currentUser;
-  const token = user ? btoa(JSON.stringify(user)) : '';
+  const token = user ? btoa(unescape(encodeURIComponent(JSON.stringify(user)))) : '';
   return {
     'Content-Type': 'application/json',
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
