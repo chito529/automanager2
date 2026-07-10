@@ -7,6 +7,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useSettings } from '@/contexts/SettingsContext';
 import { auth } from '../lib/auth';
+import { ensureFallbackChecked } from '@/lib/api';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -25,6 +26,11 @@ export default function Layout() {
   const location = useLocation();
   const { currency, setCurrency } = useSettings();
   const user = auth.currentUser;
+  const [isLocal, setIsLocal] = React.useState(false);
+
+  React.useEffect(() => {
+    ensureFallbackChecked().then(local => setIsLocal(local));
+  }, []);
 
   const handleSignOut = () => {
     auth.signOut();
@@ -88,7 +94,18 @@ export default function Layout() {
           <h1 className="text-lg font-semibold text-slate-200">
             {navigation.find(n => n.href === location.pathname)?.name || 'AutoManager'}
           </h1>
-          <div className="flex gap-4 items-center">
+          <div className="flex gap-3 items-center">
+            {isLocal ? (
+              <span className="text-[11px] bg-amber-500/10 text-amber-400 px-3 py-1 border border-amber-500/20 rounded-full font-medium flex items-center gap-1.5" title="La base de datos del servidor no está disponible. Usando almacenamiento local seguro del navegador.">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                Modo Local
+              </span>
+            ) : (
+              <span className="text-[11px] bg-emerald-500/10 text-emerald-400 px-3 py-1 border border-emerald-500/20 rounded-full font-medium flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                Modo Nube
+              </span>
+            )}
             <span className="text-[11px] bg-indigo-900/40 text-indigo-300 px-3 py-1 border border-indigo-800/60 rounded-full font-semibold">
               USD ($)
             </span>
