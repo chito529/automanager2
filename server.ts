@@ -1,23 +1,22 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { eq, and } from 'drizzle-orm';
-import { db } from './src/db/index.ts';
-import { vehicles, customers, customerInteractions, sales, expenses } from './src/db/schema.ts';
 import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
-import { cloudSqlService } from './src/services/cloudSqlService.ts';
+import { firestoreService } from './src/services/firestoreService.ts';
 
-// Seeding function to populate user's database with high-quality sample data if empty
-async function seedUserData(userId: number) {
+// Seeding function to populate user's Firestore database with high-quality sample data if empty
+async function seedUserData(userId: string, email: string) {
   try {
-    const existingVehicles = await db.select().from(vehicles).where(eq(vehicles.userId, userId));
-    if (existingVehicles.length > 0) return; // Already seeded
+    const user: any = await firestoreService.users.getOrCreate(userId, email);
+    if (user.hasSeeded) return; // Already seeded
 
-    console.log(`Pre-seeding realistic sample data for user ID: ${userId}`);
+    console.log(`Pre-seeding realistic Firestore sample data for user ID: ${userId}`);
+
+    // Mark as seeded first to prevent double-triggering
+    await firestoreService.users.markAsSeeded(userId);
 
     // Seed Vehicles
-    const [v1] = await db.insert(vehicles).values({
-      userId,
+    const v1 = await firestoreService.vehicles.create(userId, {
       brand: 'Toyota',
       model: 'Hilux CD 4x4',
       year: 2018,
@@ -28,10 +27,9 @@ async function seedUserData(userId: number) {
       status: 'Publicado',
       publicationPrice: 175000000,
       salePrice: 170000000,
-    }).returning();
+    });
 
-    const [v2] = await db.insert(vehicles).values({
-      userId,
+    const v2 = await firestoreService.vehicles.create(userId, {
       brand: 'Hyundai',
       model: 'Tucson GL',
       year: 2017,
@@ -42,10 +40,9 @@ async function seedUserData(userId: number) {
       status: 'En preparación',
       publicationPrice: 110000000,
       salePrice: 0,
-    }).returning();
+    });
 
-    const [v3] = await db.insert(vehicles).values({
-      userId,
+    const v3 = await firestoreService.vehicles.create(userId, {
       brand: 'Chevrolet',
       model: 'Onix LTZ',
       year: 2020,
@@ -56,53 +53,50 @@ async function seedUserData(userId: number) {
       status: 'Vendido',
       publicationPrice: 72000000,
       salePrice: 70000000,
-    }).returning();
+    });
 
-    // Seed Customers
-    const [c1] = await db.insert(customers).values({
-      userId,
+    // Seed Customers & Interactions
+    const c1 = await firestoreService.customers.create(userId, {
       name: 'Carlos Mendoza',
       phone: '+595 981 123456',
       email: 'carlos.mendoza@gmail.com',
       source: 'Facebook Marketplace',
       firstContactDate: '2026-06-20',
       status: 'Negociando',
-    }).returning();
-
-    await db.insert(customerInteractions).values({
-      customerId: c1.id,
-      date: '2026-06-20',
-      type: 'WhatsApp',
-      vehicleOfInterest: 'Toyota Hilux 2018',
-      note: 'Consultó sobre el precio de contado y si se acepta vehículo como parte de pago.',
-      nextFollowUp: '2026-06-25',
+      interactions: [
+        {
+          date: '2026-06-20',
+          type: 'WhatsApp',
+          vehicleOfInterest: 'Toyota Hilux 2018',
+          note: 'Consultó sobre el precio de contado y si se acepta vehículo como parte de pago.',
+          nextFollowUp: '2026-06-25',
+        }
+      ]
     });
 
-    const [c2] = await db.insert(customers).values({
-      userId,
+    const c2 = await firestoreService.customers.create(userId, {
       name: 'María Esquivel',
       phone: '+595 971 789012',
       email: 'maria.esquivel@outlook.com',
       source: 'Recomendado',
       firstContactDate: '2026-06-15',
       status: 'Ganado',
-    }).returning();
-
-    await db.insert(customerInteractions).values({
-      customerId: c2.id,
-      date: '2026-06-15',
-      type: 'Llamada',
-      vehicleOfInterest: 'Chevrolet Onix 2020',
-      note: 'Interesada en financiación propia. Se coordinó visita al showroom.',
-      nextFollowUp: '',
+      interactions: [
+        {
+          date: '2026-06-15',
+          type: 'Llamada',
+          vehicleOfInterest: 'Chevrolet Onix 2020',
+          note: 'Interesada en financiación propia. Se coordinó visita al showroom.',
+          nextFollowUp: '',
+        }
+      ]
     });
 
     // Seed Sales
-    await db.insert(sales).values({
-      userId,
+    await firestoreService.sales.create(userId, {
       date: '2026-06-29',
-      vehicleId: v3.id.toString(),
-      customerId: c2.id.toString(),
+      vehicleId: v3.id,
+      customerId: c2.id,
       salePrice: 70000000,
       downPayment: 40000000,
       pendingBalance: 30000000,
@@ -112,9 +106,8 @@ async function seedUserData(userId: number) {
     });
 
     // Seed Expenses
-    await db.insert(expenses).values({
-      userId,
-      vehicleId: v2.id.toString(),
+    await firestoreService.expenses.create(userId, {
+      vehicleId: v2.id,
       type: 'Mantenimiento',
       description: 'Cambio de pastillas de freno y aceite de motor',
       amount: 1500000,
@@ -122,17 +115,75 @@ async function seedUserData(userId: number) {
       date: '2026-06-25',
     });
 
-    await db.insert(expenses).values({
-      userId,
-      vehicleId: v1.id.toString(),
+    await firestoreService.expenses.create(userId, {
+      vehicleId: v1.id,
       type: 'Estética',
       description: 'Lavado premium y pulido de carrocería',
       amount: 600000,
       supplier: 'CarWash VIP',
       date: '2026-06-28',
     });
+
+    // Seed Cash flow ledger Transactions
+    await firestoreService.transactions.create(userId, {
+      date: '2026-06-01',
+      type: 'Egreso',
+      category: 'Alquiler de Showroom',
+      amount: 3500000,
+      paymentMethod: 'Transferencia Bancaria'
+    });
+
+    await firestoreService.transactions.create(userId, {
+      date: '2026-06-15',
+      type: 'Egreso',
+      category: 'Pago de Publicidad Digital',
+      amount: 800000,
+      paymentMethod: 'Tarjeta de Crédito'
+    });
+
+    await firestoreService.transactions.create(userId, {
+      date: '2026-06-29',
+      type: 'Ingreso',
+      category: 'Seña por Venta de Chevrolet Onix',
+      amount: 40000000,
+      paymentMethod: 'Transferencia Bancaria',
+      vehicleId: v3.id
+    });
+
+    await firestoreService.transactions.create(userId, {
+      date: '2026-06-30',
+      type: 'Ingreso',
+      category: 'Venta de Servicios Auxiliares',
+      amount: 1200000,
+      paymentMethod: 'Efectivo'
+    });
+
+    // Seed Accounts Receivable & Payable (Cuentas por cobrar/pagar)
+    await firestoreService.accounts.create(userId, {
+      type: 'Cobrar',
+      entity: 'María Esquivel',
+      amount: 30000000, // Remaining balance of Chevrolet Onix sale
+      dueDate: '2026-07-29',
+      status: 'Pendiente'
+    });
+
+    await firestoreService.accounts.create(userId, {
+      type: 'Pagar',
+      entity: 'Taller El Amigo',
+      amount: 1500000, // Remaining balance for Tucson maintenance
+      dueDate: '2026-07-15',
+      status: 'Pendiente'
+    });
+
+    await firestoreService.accounts.create(userId, {
+      type: 'Pagar',
+      entity: 'Escribanía Servín',
+      amount: 2500000, // Transfer paperwork
+      dueDate: '2026-07-20',
+      status: 'Pendiente'
+    });
   } catch (error) {
-    console.error("Error during auto seeding user data:", error);
+    console.error("Error during auto seeding Firestore user data:", error);
   }
 }
 
@@ -152,9 +203,9 @@ async function startServer() {
     try {
       const userId = req.dbUser!.id;
       // Trigger automatic background seeding if empty
-      await seedUserData(userId);
+      await seedUserData(userId, req.user!.email);
 
-      const list = await cloudSqlService.vehicles.listByUserId(userId);
+      const list = await firestoreService.vehicles.listByUserId(userId);
       res.json(list);
     } catch (error: any) {
       console.error("Failed to fetch vehicles:", error);
@@ -165,7 +216,7 @@ async function startServer() {
   app.post("/api/vehicles", requireAuth, async (req: AuthRequest, res) => {
     try {
       const userId = req.dbUser!.id;
-      const newVehicle = await cloudSqlService.vehicles.create(userId, req.body);
+      const newVehicle = await firestoreService.vehicles.create(userId, req.body);
       res.status(201).json(newVehicle);
     } catch (error: any) {
       console.error("Failed to create vehicle:", error);
@@ -176,12 +227,9 @@ async function startServer() {
   app.patch("/api/vehicles/:id", requireAuth, async (req: AuthRequest, res) => {
     try {
       const userId = req.dbUser!.id;
-      const vehicleId = parseInt(req.params.id, 10);
-      if (isNaN(vehicleId)) {
-        return res.status(400).json({ error: "Invalid vehicle ID" });
-      }
+      const vehicleId = req.params.id;
 
-      await cloudSqlService.vehicles.update(userId, vehicleId, req.body);
+      await firestoreService.vehicles.update(userId, vehicleId, req.body);
       res.json({ success: true });
     } catch (error: any) {
       console.error("Failed to update vehicle:", error);
@@ -192,12 +240,9 @@ async function startServer() {
   app.delete("/api/vehicles/:id", requireAuth, async (req: AuthRequest, res) => {
     try {
       const userId = req.dbUser!.id;
-      const vehicleId = parseInt(req.params.id, 10);
-      if (isNaN(vehicleId)) {
-        return res.status(400).json({ error: "Invalid vehicle ID" });
-      }
+      const vehicleId = req.params.id;
 
-      await cloudSqlService.vehicles.delete(userId, vehicleId);
+      await firestoreService.vehicles.delete(userId, vehicleId);
       res.json({ success: true });
     } catch (error: any) {
       console.error("Failed to delete vehicle:", error);
@@ -209,22 +254,8 @@ async function startServer() {
   app.get("/api/customers", requireAuth, async (req: AuthRequest, res) => {
     try {
       const userId = req.dbUser!.id;
-      const list = await db.select().from(customers).where(eq(customers.userId, userId));
-      
-      const enrichedList = [];
-      for (const customer of list) {
-        const interactions = await db.select()
-          .from(customerInteractions)
-          .where(eq(customerInteractions.customerId, customer.id));
-        
-        enrichedList.push({
-          ...customer,
-          id: customer.id.toString(),
-          interactions: interactions.map(i => ({ ...i, id: i.id.toString() }))
-        });
-      }
-
-      res.json(enrichedList);
+      const list = await firestoreService.customers.listByUserId(userId);
+      res.json(list);
     } catch (error: any) {
       console.error("Failed to fetch customers:", error);
       res.status(500).json({ error: error.message || "Failed to fetch customers" });
@@ -234,27 +265,8 @@ async function startServer() {
   app.post("/api/customers", requireAuth, async (req: AuthRequest, res) => {
     try {
       const userId = req.dbUser!.id;
-      const { interactions, ...customerData } = req.body;
-
-      const [newCustomer] = await db.insert(customers).values({
-        ...customerData,
-        userId,
-      }).returning();
-
-      if (interactions && Array.isArray(interactions)) {
-        for (const inter of interactions) {
-          await db.insert(customerInteractions).values({
-            customerId: newCustomer.id,
-            date: inter.date || new Date().toISOString().split('T')[0],
-            type: inter.type || 'WhatsApp',
-            vehicleOfInterest: inter.vehicleOfInterest || '',
-            note: inter.note || '',
-            nextFollowUp: inter.nextFollowUp || '',
-          });
-        }
-      }
-
-      res.status(201).json({ ...newCustomer, id: newCustomer.id.toString(), interactions: [] });
+      const newCustomer = await firestoreService.customers.create(userId, req.body);
+      res.status(201).json(newCustomer);
     } catch (error: any) {
       console.error("Failed to create customer:", error);
       res.status(500).json({ error: error.message || "Failed to create customer" });
@@ -264,46 +276,9 @@ async function startServer() {
   app.patch("/api/customers/:id", requireAuth, async (req: AuthRequest, res) => {
     try {
       const userId = req.dbUser!.id;
-      const customerId = parseInt(req.params.id, 10);
-      if (isNaN(customerId)) {
-        return res.status(400).json({ error: "Invalid customer ID" });
-      }
+      const customerId = req.params.id;
 
-      const { interactions, ...customerData } = req.body;
-
-      await db.update(customers)
-        .set(customerData)
-        .where(and(eq(customers.id, customerId), eq(customers.userId, userId)));
-
-      // If interactions are provided, update/insert them
-      if (interactions && Array.isArray(interactions)) {
-        for (const inter of interactions) {
-          if (inter.id) {
-            const interId = parseInt(inter.id, 10);
-            if (!isNaN(interId)) {
-              await db.update(customerInteractions)
-                .set({
-                  date: inter.date,
-                  type: inter.type,
-                  vehicleOfInterest: inter.vehicleOfInterest,
-                  note: inter.note,
-                  nextFollowUp: inter.nextFollowUp,
-                })
-                .where(eq(customerInteractions.id, interId));
-            }
-          } else {
-            await db.insert(customerInteractions).values({
-              customerId,
-              date: inter.date || new Date().toISOString().split('T')[0],
-              type: inter.type || 'WhatsApp',
-              vehicleOfInterest: inter.vehicleOfInterest || '',
-              note: inter.note || '',
-              nextFollowUp: inter.nextFollowUp || '',
-            });
-          }
-        }
-      }
-
+      await firestoreService.customers.update(userId, customerId, req.body);
       res.json({ success: true });
     } catch (error: any) {
       console.error("Failed to update customer:", error);
@@ -311,11 +286,24 @@ async function startServer() {
     }
   });
 
+  app.delete("/api/customers/:id", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.dbUser!.id;
+      const customerId = req.params.id;
+
+      const success = await firestoreService.customers.delete(userId, customerId);
+      res.json({ success });
+    } catch (error: any) {
+      console.error("Failed to delete customer:", error);
+      res.status(500).json({ error: error.message || "Failed to delete customer" });
+    }
+  });
+
   // ---- SECURE SALES ENDPOINTS ----
   app.get("/api/sales", requireAuth, async (req: AuthRequest, res) => {
     try {
       const userId = req.dbUser!.id;
-      const list = await cloudSqlService.sales.listByUserId(userId);
+      const list = await firestoreService.sales.listByUserId(userId);
       res.json(list);
     } catch (error: any) {
       console.error("Failed to fetch sales:", error);
@@ -326,7 +314,7 @@ async function startServer() {
   app.post("/api/sales", requireAuth, async (req: AuthRequest, res) => {
     try {
       const userId = req.dbUser!.id;
-      const newSale = await cloudSqlService.sales.create(userId, req.body);
+      const newSale = await firestoreService.sales.create(userId, req.body);
       res.status(201).json(newSale);
     } catch (error: any) {
       console.error("Failed to create sale:", error);
@@ -334,12 +322,25 @@ async function startServer() {
     }
   });
 
+  app.delete("/api/sales/:id", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.dbUser!.id;
+      const saleId = req.params.id;
+
+      const success = await firestoreService.sales.delete(userId, saleId);
+      res.json({ success });
+    } catch (error: any) {
+      console.error("Failed to delete sale:", error);
+      res.status(500).json({ error: error.message || "Failed to delete sale" });
+    }
+  });
+
   // ---- SECURE EXPENSES ENDPOINTS ----
   app.get("/api/expenses", requireAuth, async (req: AuthRequest, res) => {
     try {
       const userId = req.dbUser!.id;
-      const list = await db.select().from(expenses).where(eq(expenses.userId, userId));
-      res.json(list.map(e => ({ ...e, id: e.id.toString() })));
+      const list = await firestoreService.expenses.listByUserId(userId);
+      res.json(list);
     } catch (error: any) {
       console.error("Failed to fetch expenses:", error);
       res.status(500).json({ error: error.message || "Failed to fetch expenses" });
@@ -349,14 +350,107 @@ async function startServer() {
   app.post("/api/expenses", requireAuth, async (req: AuthRequest, res) => {
     try {
       const userId = req.dbUser!.id;
-      const [newExpense] = await db.insert(expenses).values({
-        ...req.body,
-        userId,
-      }).returning();
-      res.status(201).json({ ...newExpense, id: newExpense.id.toString() });
+      const newExpense = await firestoreService.expenses.create(userId, req.body);
+      res.status(201).json(newExpense);
     } catch (error: any) {
       console.error("Failed to create expense:", error);
       res.status(500).json({ error: error.message || "Failed to create expense" });
+    }
+  });
+
+  app.delete("/api/expenses/:id", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.dbUser!.id;
+      const expenseId = req.params.id;
+
+      const success = await firestoreService.expenses.delete(userId, expenseId);
+      res.json({ success });
+    } catch (error: any) {
+      console.error("Failed to delete expense:", error);
+      res.status(500).json({ error: error.message || "Failed to delete expense" });
+    }
+  });
+
+  // ---- SECURE TRANSACTIONS ENDPOINTS ----
+  app.get("/api/transactions", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.dbUser!.id;
+      const list = await firestoreService.transactions.listByUserId(userId);
+      res.json(list);
+    } catch (error: any) {
+      console.error("Failed to fetch transactions:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch transactions" });
+    }
+  });
+
+  app.post("/api/transactions", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.dbUser!.id;
+      const newTx = await firestoreService.transactions.create(userId, req.body);
+      res.status(201).json(newTx);
+    } catch (error: any) {
+      console.error("Failed to create transaction:", error);
+      res.status(500).json({ error: error.message || "Failed to create transaction" });
+    }
+  });
+
+  app.delete("/api/transactions/:id", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.dbUser!.id;
+      const txId = req.params.id;
+      await firestoreService.transactions.delete(userId, txId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Failed to delete transaction:", error);
+      res.status(500).json({ error: error.message || "Failed to delete transaction" });
+    }
+  });
+
+  // ---- SECURE ACCOUNTS ENDPOINTS ----
+  app.get("/api/accounts", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.dbUser!.id;
+      const list = await firestoreService.accounts.listByUserId(userId);
+      res.json(list);
+    } catch (error: any) {
+      console.error("Failed to fetch accounts:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch accounts" });
+    }
+  });
+
+  app.post("/api/accounts", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.dbUser!.id;
+      const newAcc = await firestoreService.accounts.create(userId, req.body);
+      res.status(201).json(newAcc);
+    } catch (error: any) {
+      console.error("Failed to create account:", error);
+      res.status(500).json({ error: error.message || "Failed to create account" });
+    }
+  });
+
+  app.patch("/api/accounts/:id/status", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.dbUser!.id;
+      const accId = req.params.id;
+      const { status } = req.body;
+      await firestoreService.accounts.updateStatus(userId, accId, status);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Failed to update account status:", error);
+      res.status(500).json({ error: error.message || "Failed to update account status" });
+    }
+  });
+
+  app.delete("/api/accounts/:id", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.dbUser!.id;
+      const accId = req.params.id;
+      await firestoreService.accounts.delete(userId, accId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Failed to delete account:", error);
+      res.status(500).json({ error: error.message || "Failed to delete account" });
     }
   });
 

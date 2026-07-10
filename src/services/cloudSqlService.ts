@@ -129,6 +129,18 @@ export const cloudSqlService = {
      * Deletes a vehicle record.
      */
     delete: async (userId: number, id: number): Promise<boolean> => {
+      // Delete associated expenses first to satisfy foreign key or logical constraints
+      await pool.query(
+        'DELETE FROM expenses WHERE user_id = $1 AND vehicle_id = $2',
+        [userId, id.toString()]
+      );
+
+      // Delete associated sales first
+      await pool.query(
+        'DELETE FROM sales WHERE user_id = $1 AND vehicle_id = $2',
+        [userId, id.toString()]
+      );
+
       const query = `
         DELETE FROM vehicles
         WHERE user_id = $1 AND id = $2

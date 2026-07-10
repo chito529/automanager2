@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { Expense, Vehicle } from '@/types';
-import { Plus, FileText, X, Tag } from 'lucide-react';
+import { Plus, FileText, X, Tag, Trash2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useConfirmation } from '@/contexts/ConfirmationContext';
 
 const EXPENSE_TYPES = [
   'Mantenimiento',
@@ -21,6 +22,7 @@ export default function Expenses() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const { formatCurrency } = useSettings();
+  const { confirm } = useConfirmation();
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -107,6 +109,36 @@ export default function Expenses() {
     }
   };
 
+  const handleDelete = async (expenseId: string, vehicleId: string, amount: number) => {
+    const confirmed = await confirm({
+      title: 'Eliminar Gasto',
+      message: '¿Está seguro de que desea eliminar este gasto? El precio de adquisición del vehículo se actualizará automáticamente.',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      type: 'danger'
+    });
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+      await api.expenses.delete(expenseId);
+
+      // Decrement the vehicle's purchasePrice
+      const associatedVehicle = vehicles.find(v => v.id.toString() === vehicleId.toString());
+      if (associatedVehicle) {
+        const newPurchasePrice = Math.max(0, associatedVehicle.purchasePrice - Number(amount));
+        await api.vehicles.update(vehicleId, { purchasePrice: newPurchasePrice });
+      }
+
+      await loadData();
+    } catch (e) {
+      console.error('Error deleting expense:', e);
+      alert('Error al eliminar el gasto');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getVehicleLabel = (vehicleId: string) => {
     const v = vehicles.find(item => item.id.toString() === vehicleId.toString());
     return v ? `${v.brand} ${v.model} (${v.year})` : `Vehículo #${vehicleId}`;
@@ -173,6 +205,9 @@ export default function Expenses() {
                 <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Tipo / Descripción</th>
                 <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Proveedor</th>
                 <th scope="col" className="px-3 py-3.5 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Monto</th>
+                <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                  <span className="sr-only">Acciones</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800 bg-transparent">
@@ -188,6 +223,15 @@ export default function Expenses() {
                   </td>
                   <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-400">{e.supplier || 'N/D'}</td>
                   <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-indigo-400 font-semibold font-mono">{formatCurrency(e.amount)}</td>
+                  <td className="whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                    <button
+                      onClick={() => handleDelete(e.id, e.vehicleId, e.amount)}
+                      className="text-red-500 hover:text-red-400 cursor-pointer bg-transparent border-0"
+                      title="Eliminar Gasto"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -253,7 +297,7 @@ export default function Expenses() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Monto del Gasto (₲) *</label>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Monto del Gasto (USD) *</label>
                 <input
                   type="number"
                   required

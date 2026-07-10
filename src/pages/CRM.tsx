@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { Customer, CustomerStatus } from '@/types';
-import { Plus, Phone, Mail, Calendar, X, Edit, ArrowRightLeft } from 'lucide-react';
+import { Plus, Phone, Mail, Calendar, X, Edit, ArrowRightLeft, Trash2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
+import { useConfirmation } from '@/contexts/ConfirmationContext';
 
 const CUSTOMER_STATUSES: CustomerStatus[] = [
   'Nuevo',
@@ -15,6 +16,7 @@ const CUSTOMER_STATUSES: CustomerStatus[] = [
 export default function CRM() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const { confirm } = useConfirmation();
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -103,6 +105,30 @@ export default function CRM() {
     } catch (e) {
       console.error('Error updating status:', e);
       alert('Error al actualizar etapa del cliente');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedCustomer) return;
+    const confirmed = await confirm({
+      title: 'Eliminar Cliente',
+      message: '¿Está seguro de que desea eliminar este cliente? Esta acción no se puede deshacer y borrará permanentemente sus datos de seguimiento.',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      type: 'danger'
+    });
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+      await api.customers.delete(selectedCustomer.id);
+      setIsDetailOpen(false);
+      await loadCustomers();
+    } catch (e) {
+      console.error('Error deleting customer:', e);
+      alert('Error al eliminar el cliente');
     } finally {
       setLoading(false);
     }
@@ -333,22 +359,33 @@ export default function CRM() {
                 </select>
               </div>
 
-              <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
+              <div className="pt-4 border-t border-slate-800 flex justify-between items-center">
                 <button
                   type="button"
-                  onClick={() => setIsDetailOpen(false)}
-                  className="px-4 py-2 border border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-sm font-medium rounded-lg transition-colors cursor-pointer"
+                  onClick={handleDelete}
+                  className="px-3 py-2 bg-red-950/40 border border-red-900/50 hover:bg-red-900 hover:border-red-800 text-red-400 hover:text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                  title="Eliminar Cliente"
                 >
-                  Cancelar
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Eliminar
                 </button>
-                <button
-                  type="button"
-                  onClick={handleUpdateStatus}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1 cursor-pointer shadow-md"
-                >
-                  <ArrowRightLeft className="h-3.5 w-3.5" />
-                  Mover Etapa
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsDetailOpen(false)}
+                    className="px-4 py-2 border border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-sm font-medium rounded-lg transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleUpdateStatus}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1 cursor-pointer shadow-md"
+                  >
+                    <ArrowRightLeft className="h-3.5 w-3.5" />
+                    Mover
+                  </button>
+                </div>
               </div>
             </div>
           </div>

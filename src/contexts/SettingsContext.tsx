@@ -12,13 +12,11 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [currency, setCurrency] = useState<Currency>(() => {
-    return (localStorage.getItem('app_currency') as Currency) || 'PYG';
-  });
+  const [currency, setCurrency] = useState<Currency>('USD');
 
   useEffect(() => {
-    localStorage.setItem('app_currency', currency);
-  }, [currency]);
+    localStorage.setItem('app_currency', 'USD');
+  }, []);
 
   const formatCurrency = (value: number) => {
     if (currency === 'PYG') {

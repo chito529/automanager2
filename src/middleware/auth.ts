@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { db } from '../db/index.ts';
-import { users } from '../db/schema.ts';
+import { firestoreService } from '../services/firestoreService.ts';
 
 export interface DecodedCustomUser {
   uid: string;
@@ -10,27 +9,23 @@ export interface DecodedCustomUser {
 
 export interface AuthRequest extends Request {
   user?: DecodedCustomUser;
-  dbUser?: typeof users.$inferSelect;
+  dbUser?: {
+    uid: string;
+    email: string;
+    hasSeeded: boolean;
+    id: string; // Maintain 'id' string alias for backward compatibility
+  };
 }
 
 export async function getOrCreateUser(uid: string, email: string) {
   try {
-    const result = await db.insert(users)
-      .values({
-        uid,
-        email,
-      })
-      .onConflictDoUpdate({
-        target: users.uid,
-        set: {
-          email,
-        },
-      })
-      .returning();
-
-    return result[0];
+    const firestoreUser: any = await firestoreService.users.getOrCreate(uid, email);
+    return {
+      ...firestoreUser,
+      id: uid // Map id to uid to keep all routes working perfectly
+    };
   } catch (error) {
-    console.error("Failed to register or sync user profile:", error);
+    console.error("Failed to register or sync user profile in Firestore:", error);
     throw new Error("Database profile synchronization failed", { cause: error });
   }
 }

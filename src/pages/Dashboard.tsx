@@ -4,13 +4,13 @@ import { CarFront, Users, DollarSign, Wallet } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
 
 const data = [
-  { name: 'Ene', ventas: 40000000, utilidad: 5000000 },
-  { name: 'Feb', ventas: 30000000, utilidad: 3500000 },
-  { name: 'Mar', ventas: 20000000, utilidad: 2500000 },
-  { name: 'Abr', ventas: 27800000, utilidad: 3908000 },
-  { name: 'May', ventas: 18900000, utilidad: 4800000 },
-  { name: 'Jun', ventas: 23900000, utilidad: 3800000 },
-  { name: 'Jul', ventas: 34900000, utilidad: 4300000 },
+  { name: 'Ene', ventas: 40000, utilidad: 5000 },
+  { name: 'Feb', ventas: 30000, utilidad: 3500 },
+  { name: 'Mar', ventas: 20000, utilidad: 2500 },
+  { name: 'Abr', ventas: 27800, utilidad: 3908 },
+  { name: 'May', ventas: 18900, utilidad: 4800 },
+  { name: 'Jun', ventas: 23900, utilidad: 3800 },
+  { name: 'Jul', ventas: 34900, utilidad: 4300 },
 ];
 
 export default function Dashboard() {
@@ -22,7 +22,7 @@ export default function Dashboard() {
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold leading-6 text-slate-200">Dashboard</h1>
           <p className="mt-2 text-sm text-slate-400">
-            Resumen financiero y comercial del negocio.
+            Resumen financiero y comercial del negocio (USD).
           </p>
         </div>
       </div>
@@ -30,7 +30,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 shrink-0">
         <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 shadow-sm">
           <p className="text-[11px] text-slate-500 uppercase tracking-widest mb-1">Ventas del Mes</p>
-          <p className="text-2xl font-bold">{formatCurrency(142500000)}</p>
+          <p className="text-2xl font-bold">{formatCurrency(142500)}</p>
           <div className="flex items-center gap-1 mt-2 text-emerald-400 text-xs">
             12% vs mes ant.
           </div>
@@ -38,7 +38,7 @@ export default function Dashboard() {
 
         <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 shadow-sm">
           <p className="text-[11px] text-slate-500 uppercase tracking-widest mb-1">Utilidad Neta</p>
-          <p className="text-2xl font-bold text-indigo-400">{formatCurrency(38420000)}</p>
+          <p className="text-2xl font-bold text-indigo-400">{formatCurrency(38420)}</p>
           <div className="flex items-center gap-1 mt-2 text-slate-500 text-xs">
             8 Unidades vendidas
           </div>
@@ -46,7 +46,7 @@ export default function Dashboard() {
 
         <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 shadow-sm">
           <p className="text-[11px] text-slate-500 uppercase tracking-widest mb-1">Ticket Promedio</p>
-          <p className="text-2xl font-bold">{formatCurrency(17812500)}</p>
+          <p className="text-2xl font-bold">{formatCurrency(17812)}</p>
           <div className="flex items-center gap-1 mt-2 text-emerald-400 text-xs">
             Eficiencia 92%
           </div>

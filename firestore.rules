@@ -1,43 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Global safety net: default deny
     match /{document=**} {
-      allow read, write: if false;
-    }
-
-    // Helper function to check if the user is authenticated
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    // Rules for business collections (Vehicles, Expenses, Customers, Sales, Transactions, Accounts, Users)
-    match /vehicles/{vehicleId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /expenses/{expenseId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /customers/{customerId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /sales/{saleId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /transactions/{transactionId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /accounts/{accountId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /users/{userId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if true;
     }
   }
 }

@@ -6,5 +6,6 @@
   "firestoreDatabaseId": "ai-studio-automanager-64d7f017-328c-4fb9-add6-ffeea630ebd3",
   "storageBucket": "subtle-keyword-mdckx.firebasestorage.app",
   "messagingSenderId": "385069958741",
-  "measurementId": ""
+  "measurementId": "",
+  "oAuthClientId": "385069958741-3t2inql13s2m64sjuaqbchvljp05oaiq.apps.googleusercontent.com"
 }

@@ -1,11 +1,12 @@
 import { relations } from 'drizzle-orm';
-import { integer, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, integer, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
 
 // Users table (links to Firebase Auth UID)
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   uid: text('uid').notNull().unique(),
   email: text('email').notNull(),
+  hasSeeded: boolean('has_seeded').default(false),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -75,6 +76,29 @@ export const expenses = pgTable('expenses', {
   date: text('date').notNull(),
 });
 
+// Transactions table (for general cash flow ledger)
+export const transactions = pgTable('transactions', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  date: text('date').notNull(),
+  type: text('type').notNull(), // 'Ingreso', 'Egreso'
+  category: text('category').notNull(), // Concept/Category description
+  amount: integer('amount').notNull(),
+  paymentMethod: text('payment_method').notNull(),
+  vehicleId: text('vehicle_id'), // Optional link to a vehicle
+});
+
+// Accounts table (for both Accounts Receivable and Accounts Payable)
+export const accounts = pgTable('accounts', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  type: text('type').notNull(), // 'Cobrar', 'Pagar'
+  entity: text('entity').notNull(), // Customer name or Supplier name
+  amount: integer('amount').notNull(),
+  dueDate: text('due_date').notNull(),
+  status: text('status').notNull(), // 'Pendiente', 'Pagado'
+});
+
 // --- Relations ---
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -82,6 +106,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   customers: many(customers),
   sales: many(sales),
   expenses: many(expenses),
+  transactions: many(transactions),
+  accounts: many(accounts),
 }));
 
 export const vehiclesRelations = relations(vehicles, ({ one }) => ({
@@ -116,6 +142,20 @@ export const salesRelations = relations(sales, ({ one }) => ({
 export const expensesRelations = relations(expenses, ({ one }) => ({
   user: one(users, {
     fields: [expenses.userId],
+    references: [users.id],
+  }),
+}));
+
+export const transactionsRelations = relations(transactions, ({ one }) => ({
+  user: one(users, {
+    fields: [transactions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const accountsRelations = relations(accounts, ({ one }) => ({
+  user: one(users, {
+    fields: [accounts.userId],
     references: [users.id],
   }),
 }));

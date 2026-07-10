@@ -89,23 +89,10 @@ export default function Layout() {
             {navigation.find(n => n.href === location.pathname)?.name || 'AutoManager'}
           </h1>
           <div className="flex gap-4 items-center">
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value as 'PYG' | 'USD')}
-              className="bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer hidden md:block"
-            >
-              <option value="PYG">Guaraníes (₲)</option>
-              <option value="USD">Dólares ($)</option>
-            </select>
+            <span className="text-[11px] bg-indigo-900/40 text-indigo-300 px-3 py-1 border border-indigo-800/60 rounded-full font-semibold">
+              USD ($)
+            </span>
             <div className="flex gap-4 md:hidden items-center">
-              <select
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value as 'PYG' | 'USD')}
-                className="bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
-              >
-                <option value="PYG">₲</option>
-                <option value="USD">$</option>
-              </select>
               <CarFront className="h-6 w-6 text-indigo-500" />
             </div>
           </div>

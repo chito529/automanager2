@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { Sale, Vehicle, Customer } from '@/types';
-import { Plus, Check, Clock, X, Info } from 'lucide-react';
+import { Plus, Check, Clock, X, Info, Trash2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useConfirmation } from '@/contexts/ConfirmationContext';
 
 export default function Sales() {
   const [sales, setSales] = useState<Sale[]>([]);
@@ -11,6 +12,7 @@ export default function Sales() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const { formatCurrency } = useSettings();
+  const { confirm } = useConfirmation();
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -121,6 +123,34 @@ export default function Sales() {
     }
   };
 
+  const handleDelete = async (saleId: string, vehicleId: string) => {
+    const confirmed = await confirm({
+      title: 'Eliminar Venta',
+      message: '¿Está seguro de que desea eliminar esta venta? Esta acción restaurará el estado del vehículo a "Publicado".',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      type: 'danger'
+    });
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+      await api.sales.delete(saleId);
+      
+      // Restore the vehicle's status to 'Publicado'
+      await api.vehicles.update(vehicleId, {
+        status: 'Publicado'
+      });
+
+      await loadData();
+    } catch (e) {
+      console.error('Error deleting sale:', e);
+      alert('Error al eliminar la venta');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Helper to find original vehicle brand/model for displaying
   const getVehicleLabel = (vehicleId: string) => {
     const v = vehicles.find(item => item.id.toString() === vehicleId.toString());
@@ -165,16 +195,19 @@ export default function Sales() {
               <th scope="col" className="px-3 py-3.5 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Precio Venta</th>
               <th scope="col" className="px-3 py-3.5 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Saldo Pendiente</th>
               <th scope="col" className="px-3 py-3.5 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Utilidad Neta</th>
+              <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                <span className="sr-only">Acciones</span>
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800 bg-transparent">
             {loading && sales.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-8 text-center text-sm text-slate-500">Cargando...</td>
+                <td colSpan={6} className="py-8 text-center text-sm text-slate-500">Cargando...</td>
               </tr>
             ) : sales.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-8 text-center text-sm text-slate-500">No hay ventas registradas.</td>
+                <td colSpan={6} className="py-8 text-center text-sm text-slate-500">No hay ventas registradas.</td>
               </tr>
             ) : (
               sales.map(s => (
@@ -199,6 +232,15 @@ export default function Sales() {
                     )}
                   </td>
                   <td className="whitespace-nowrap px-3 py-4 text-sm text-emerald-400 font-bold text-right font-mono">{formatCurrency(s.netProfit)}</td>
+                  <td className="whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                    <button
+                      onClick={() => handleDelete(s.id, s.vehicleId)}
+                      className="text-red-500 hover:text-red-400 cursor-pointer bg-transparent border-0"
+                      title="Eliminar Venta"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
                 </tr>
               ))
             )}
@@ -284,7 +326,7 @@ export default function Sales() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Precio de Venta Actual (₲)</label>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Precio de Venta Actual (USD)</label>
                   <input
                     type="number"
                     required
@@ -294,7 +336,7 @@ export default function Sales() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Entrega Inicial (₲)</label>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Entrega Inicial (USD)</label>
                   <input
                     type="number"
                     value={downPayment}
@@ -305,7 +347,7 @@ export default function Sales() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Comisión de Venta / Broker (₲)</label>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Comisión de Venta / Broker (USD)</label>
                 <input
                   type="number"
                   value={commission}

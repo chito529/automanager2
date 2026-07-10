@@ -1,0 +1,8 @@
+{
+  "firestore": [
+    {
+      "database": "ai-studio-automanager-64d7f017-328c-4fb9-add6-ffeea630ebd3",
+      "rules": "firestore.rules"
+    }
+  ]
+}

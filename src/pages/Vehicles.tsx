@@ -3,6 +3,7 @@ import { api } from '@/lib/api';
 import { Vehicle, VehicleStatus } from '@/types';
 import { Plus, Edit2, Trash2, X } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useConfirmation } from '@/contexts/ConfirmationContext';
 
 const VEHICLE_STATUSES: VehicleStatus[] = [
   'Comprado',
@@ -16,6 +17,7 @@ export default function Vehicles() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const { formatCurrency } = useSettings();
+  const { confirm } = useConfirmation();
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -90,7 +92,14 @@ export default function Vehicles() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('¿Está seguro de que desea eliminar este vehículo?')) return;
+    const confirmed = await confirm({
+      title: 'Eliminar Vehículo',
+      message: '¿Está seguro de que desea eliminar este vehículo? Esta acción no se puede deshacer y borrará permanentemente sus datos.',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      type: 'danger'
+    });
+    if (!confirmed) return;
     try {
       setLoading(true);
       await api.vehicles.delete(id);
@@ -317,7 +326,7 @@ export default function Vehicles() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Precio de Costo (₲)</label>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Precio de Costo (USD)</label>
                   <input
                     type="number"
                     required
@@ -327,7 +336,7 @@ export default function Vehicles() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Precio Publicación (₲)</label>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Precio Publicación (USD)</label>
                   <input
                     type="number"
                     required
@@ -352,7 +361,7 @@ export default function Vehicles() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Precio de Venta (₲)</label>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Precio de Venta (USD)</label>
                   <input
                     type="number"
                     value={salePrice}

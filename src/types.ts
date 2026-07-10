@@ -3,6 +3,7 @@ export type CustomerStatus = 'Nuevo' | 'En seguimiento' | 'Negociando' | 'Ganado
 
 export interface Vehicle {
   id: string;
+  userId?: string;
   purchaseDate: string;
   brand: string;
   model: string;
@@ -17,6 +18,7 @@ export interface Vehicle {
 
 export interface Expense {
   id: string;
+  userId?: string;
   vehicleId: string;
   type: string;
   description: string;
@@ -48,6 +50,7 @@ export interface Customer {
 
 export interface Sale {
   id: string;
+  userId?: string;
   date: string;
   vehicleId: string;
   customerId: string;
