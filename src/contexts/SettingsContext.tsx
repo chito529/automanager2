@@ -15,7 +15,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [currency, setCurrency] = useState<Currency>('USD');
 
   useEffect(() => {
-    localStorage.setItem('app_currency', 'USD');
+    try {
+      localStorage.setItem('app_currency', 'USD');
+    } catch (err) {
+      console.warn('[Storage] Failed to write to localStorage in SettingsProvider', err);
+    }
   }, []);
 
   const formatCurrency = (value: number) => {

@@ -10,41 +10,83 @@ const LOCAL_STORAGE_KEYS = {
   accounts: 'auto_manager_accounts'
 };
 
+// Safe storage wrapper to prevent crashes in restricted iframe / sandbox environments
+const memoryStorage: Record<string, string> = {};
+
+export const safeStorage = {
+  getItem(key: string): string | null {
+    try {
+      return localStorage.getItem(key);
+    } catch (err) {
+      console.warn(`[Storage] Failed to read from localStorage for key "${key}", falling back to memory.`, err);
+      return memoryStorage[key] || null;
+    }
+  },
+  setItem(key: string, value: string): void {
+    try {
+      localStorage.setItem(key, value);
+    } catch (err) {
+      console.warn(`[Storage] Failed to write to localStorage for key "${key}", falling back to memory.`, err);
+      memoryStorage[key] = value;
+    }
+  }
+};
+
+function safeGetLocalStorageList<T>(key: string, seedData: T[] = []): T[] {
+  try {
+    const data = safeStorage.getItem(key);
+    if (!data) {
+      safeStorage.setItem(key, JSON.stringify(seedData));
+      return seedData;
+    }
+    const parsed = JSON.parse(data);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+    safeStorage.setItem(key, JSON.stringify(seedData));
+    return seedData;
+  } catch (err) {
+    console.error(`[Storage] safeGetLocalStorageList failed for key ${key}, reverting to seed:`, err);
+    safeStorage.setItem(key, JSON.stringify(seedData));
+    return seedData;
+  }
+}
+
 function initializeLocalStorageSeed() {
-  if (!localStorage.getItem(LOCAL_STORAGE_KEYS.vehicles)) {
-    localStorage.setItem(LOCAL_STORAGE_KEYS.vehicles, JSON.stringify([
+  if (!safeStorage.getItem(LOCAL_STORAGE_KEYS.vehicles)) {
+    safeStorage.setItem(LOCAL_STORAGE_KEYS.vehicles, JSON.stringify([
       { id: '1', brand: 'Toyota', model: 'Hilux CD 4x4', year: 2018, vin: '17GFC529X8201', supplier: 'Garden Automotores S.A.', purchaseDate: '2026-05-10', purchasePrice: 140000000, status: 'Publicado', publicationPrice: 175000000, salePrice: 170000000 },
       { id: '2', brand: 'Hyundai', model: 'Tucson GL', year: 2017, vin: 'KMHJU81B6HH045', supplier: 'Automotor S.A.', purchaseDate: '2026-06-01', purchasePrice: 85000000, status: 'En preparación', publicationPrice: 110000000, salePrice: 0 },
       { id: '3', brand: 'Chevrolet', model: 'Onix LTZ', year: 2020, vin: '9BGKS48D0LG128', supplier: 'Particular', purchaseDate: '2026-04-15', purchasePrice: 55000000, status: 'Vendido', publicationPrice: 72000000, salePrice: 70000000 }
     ]));
   }
-  if (!localStorage.getItem(LOCAL_STORAGE_KEYS.customers)) {
-    localStorage.setItem(LOCAL_STORAGE_KEYS.customers, JSON.stringify([
+  if (!safeStorage.getItem(LOCAL_STORAGE_KEYS.customers)) {
+    safeStorage.setItem(LOCAL_STORAGE_KEYS.customers, JSON.stringify([
       { id: '1', name: 'Carlos Mendoza', phone: '+595 981 123456', email: 'carlos.mendoza@gmail.com', source: 'Facebook Marketplace', firstContactDate: '2026-06-20', status: 'Negociando', interactions: [{ id: 'int_1', date: '2026-06-20', type: 'WhatsApp', vehicleOfInterest: 'Toyota Hilux 2018', note: 'Consultó sobre el precio de contado y si se acepta vehículo como parte de pago.', nextFollowUp: '2026-06-25' }] },
       { id: '2', name: 'María Esquivel', phone: '+595 971 789012', email: 'maria.esquivel@outlook.com', source: 'Recomendado', firstContactDate: '2026-06-15', status: 'Ganado', interactions: [{ id: 'int_2', date: '2026-06-15', type: 'Llamada', vehicleOfInterest: 'Chevrolet Onix 2020', note: 'Interesada en financiación propia. Se coordinó visita al showroom.', nextFollowUp: '' }] }
     ]));
   }
-  if (!localStorage.getItem(LOCAL_STORAGE_KEYS.sales)) {
-    localStorage.setItem(LOCAL_STORAGE_KEYS.sales, JSON.stringify([
+  if (!safeStorage.getItem(LOCAL_STORAGE_KEYS.sales)) {
+    safeStorage.setItem(LOCAL_STORAGE_KEYS.sales, JSON.stringify([
       { id: '1', date: '2026-06-29', vehicleId: '3', customerId: '2', salePrice: 70000000, downPayment: 40000000, pendingBalance: 30000000, paymentMethod: 'Transferencia Bancaria', commission: 2000000, netProfit: 13000000 }
     ]));
   }
-  if (!localStorage.getItem(LOCAL_STORAGE_KEYS.expenses)) {
-    localStorage.setItem(LOCAL_STORAGE_KEYS.expenses, JSON.stringify([
+  if (!safeStorage.getItem(LOCAL_STORAGE_KEYS.expenses)) {
+    safeStorage.setItem(LOCAL_STORAGE_KEYS.expenses, JSON.stringify([
       { id: '1', vehicleId: '2', type: 'Mantenimiento', description: 'Cambio de pastillas de freno y aceite de motor', amount: 1500000, supplier: 'Taller El Amigo', date: '2026-06-25' },
       { id: '2', vehicleId: '1', type: 'Estética', description: 'Lavado premium y pulido de carrocería', amount: 600000, supplier: 'CarWash VIP', date: '2026-06-28' }
     ]));
   }
-  if (!localStorage.getItem(LOCAL_STORAGE_KEYS.transactions)) {
-    localStorage.setItem(LOCAL_STORAGE_KEYS.transactions, JSON.stringify([
+  if (!safeStorage.getItem(LOCAL_STORAGE_KEYS.transactions)) {
+    safeStorage.setItem(LOCAL_STORAGE_KEYS.transactions, JSON.stringify([
       { id: '1', date: '2026-06-01', type: 'Egreso', category: 'Alquiler de Showroom', amount: 3500000, paymentMethod: 'Transferencia Bancaria' },
       { id: '2', date: '2026-06-15', type: 'Egreso', category: 'Pago de Publicidad Digital', amount: 800000, paymentMethod: 'Tarjeta de Crédito' },
       { id: '3', date: '2026-06-29', type: 'Ingreso', category: 'Seña por Venta de Chevrolet Onix', amount: 40000000, paymentMethod: 'Transferencia Bancaria', vehicleId: '3' },
       { id: '4', date: '2026-06-30', type: 'Ingreso', category: 'Venta de Servicios Auxiliares', amount: 1200000, paymentMethod: 'Efectivo' }
     ]));
   }
-  if (!localStorage.getItem(LOCAL_STORAGE_KEYS.accounts)) {
-    localStorage.setItem(LOCAL_STORAGE_KEYS.accounts, JSON.stringify([
+  if (!safeStorage.getItem(LOCAL_STORAGE_KEYS.accounts)) {
+    safeStorage.setItem(LOCAL_STORAGE_KEYS.accounts, JSON.stringify([
       { id: '1', type: 'Cobrar', entity: 'María Esquivel', amount: 30000000, dueDate: '2026-07-29', status: 'Pendiente' },
       { id: '2', type: 'Pagar', entity: 'Taller El Amigo', amount: 1500000, dueDate: '2026-07-15', status: 'Pendiente' },
       { id: '3', type: 'Pagar', entity: 'Escribanía Servín', amount: 2500000, dueDate: '2026-07-20', status: 'Pendiente' }
@@ -53,30 +95,40 @@ function initializeLocalStorageSeed() {
 }
 
 let isLocalFallback = false;
-let fallbackChecked = false;
+let checkPromise: Promise<boolean> | null = null;
 
-export async function ensureFallbackChecked(): Promise<boolean> {
-  if (fallbackChecked) return isLocalFallback;
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1200);
-    const res = await fetch('/api/health', { signal: controller.signal });
-    clearTimeout(timeoutId);
-    if (res.ok) {
-      const data = await res.json();
-      isLocalFallback = data.status !== 'ok';
-    } else {
+export function ensureFallbackChecked(): Promise<boolean> {
+  if (checkPromise) return checkPromise;
+
+  checkPromise = (async () => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1200);
+      const res = await fetch('/api/health', { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await res.json();
+          isLocalFallback = data.status !== 'ok';
+        } else {
+          isLocalFallback = true;
+        }
+      } else {
+        isLocalFallback = true;
+      }
+    } catch (err) {
       isLocalFallback = true;
     }
-  } catch (err) {
-    isLocalFallback = true;
-  }
-  fallbackChecked = true;
-  if (isLocalFallback) {
-    console.warn('[API] Backend is unavailable. Automatically switching to client-side localStorage fallback database.');
-    initializeLocalStorageSeed();
-  }
-  return isLocalFallback;
+    
+    if (isLocalFallback) {
+      console.warn('[API] Backend is unavailable. Automatically switching to client-side safeStorage fallback database.');
+      initializeLocalStorageSeed();
+    }
+    return isLocalFallback;
+  })();
+
+  return checkPromise;
 }
 
 // Helper to get auth headers
@@ -97,7 +149,7 @@ export const api = {
   vehicles: {
     list: async (): Promise<Vehicle[]> => {
       if (await ensureFallbackChecked()) {
-        return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.vehicles) || '[]');
+        return safeGetLocalStorageList<Vehicle>(LOCAL_STORAGE_KEYS.vehicles);
       }
       const response = await fetch('/api/vehicles', {
         headers: await getHeaders(),
@@ -107,11 +159,11 @@ export const api = {
     },
     create: async (data: Omit<Vehicle, 'id'>): Promise<string> => {
       if (await ensureFallbackChecked()) {
-        const list = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.vehicles) || '[]');
+        const list = safeGetLocalStorageList<Vehicle>(LOCAL_STORAGE_KEYS.vehicles);
         const id = (Date.now() + Math.floor(Math.random() * 1000)).toString();
         const newItem = { id, ...data };
         list.push(newItem);
-        localStorage.setItem(LOCAL_STORAGE_KEYS.vehicles, JSON.stringify(list));
+        safeStorage.setItem(LOCAL_STORAGE_KEYS.vehicles, JSON.stringify(list));
         return id;
       }
       const response = await fetch('/api/vehicles', {
@@ -125,11 +177,11 @@ export const api = {
     },
     update: async (id: string, data: Partial<Vehicle>): Promise<void> => {
       if (await ensureFallbackChecked()) {
-        const list = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.vehicles) || '[]');
+        const list = safeGetLocalStorageList<Vehicle>(LOCAL_STORAGE_KEYS.vehicles);
         const index = list.findIndex((v: any) => v.id.toString() === id.toString());
         if (index !== -1) {
           list[index] = { ...list[index], ...data };
-          localStorage.setItem(LOCAL_STORAGE_KEYS.vehicles, JSON.stringify(list));
+          safeStorage.setItem(LOCAL_STORAGE_KEYS.vehicles, JSON.stringify(list));
         }
         return;
       }
@@ -142,9 +194,9 @@ export const api = {
     },
     delete: async (id: string): Promise<void> => {
       if (await ensureFallbackChecked()) {
-        const list = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.vehicles) || '[]');
+        const list = safeGetLocalStorageList<Vehicle>(LOCAL_STORAGE_KEYS.vehicles);
         const filtered = list.filter((v: any) => v.id.toString() !== id.toString());
-        localStorage.setItem(LOCAL_STORAGE_KEYS.vehicles, JSON.stringify(filtered));
+        safeStorage.setItem(LOCAL_STORAGE_KEYS.vehicles, JSON.stringify(filtered));
         return;
       }
       const response = await fetch(`/api/vehicles/${id}`, {
@@ -158,7 +210,7 @@ export const api = {
   customers: {
     list: async (): Promise<Customer[]> => {
       if (await ensureFallbackChecked()) {
-        return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.customers) || '[]');
+        return safeGetLocalStorageList<Customer>(LOCAL_STORAGE_KEYS.customers);
       }
       const response = await fetch('/api/customers', {
         headers: await getHeaders(),
@@ -168,11 +220,11 @@ export const api = {
     },
     create: async (data: Omit<Customer, 'id'>): Promise<string> => {
       if (await ensureFallbackChecked()) {
-        const list = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.customers) || '[]');
+        const list = safeGetLocalStorageList<Customer>(LOCAL_STORAGE_KEYS.customers);
         const id = (Date.now() + Math.floor(Math.random() * 1000)).toString();
         const newItem = { id, ...data, interactions: data.interactions || [] };
         list.push(newItem);
-        localStorage.setItem(LOCAL_STORAGE_KEYS.customers, JSON.stringify(list));
+        safeStorage.setItem(LOCAL_STORAGE_KEYS.customers, JSON.stringify(list));
         return id;
       }
       const response = await fetch('/api/customers', {
@@ -186,11 +238,11 @@ export const api = {
     },
     update: async (id: string, data: Partial<Customer>): Promise<void> => {
       if (await ensureFallbackChecked()) {
-        const list = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.customers) || '[]');
+        const list = safeGetLocalStorageList<Customer>(LOCAL_STORAGE_KEYS.customers);
         const index = list.findIndex((c: any) => c.id.toString() === id.toString());
         if (index !== -1) {
           list[index] = { ...list[index], ...data };
-          localStorage.setItem(LOCAL_STORAGE_KEYS.customers, JSON.stringify(list));
+          safeStorage.setItem(LOCAL_STORAGE_KEYS.customers, JSON.stringify(list));
         }
         return;
       }
@@ -203,9 +255,9 @@ export const api = {
     },
     delete: async (id: string): Promise<void> => {
       if (await ensureFallbackChecked()) {
-        const list = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.customers) || '[]');
+        const list = safeGetLocalStorageList<Customer>(LOCAL_STORAGE_KEYS.customers);
         const filtered = list.filter((c: any) => c.id.toString() !== id.toString());
-        localStorage.setItem(LOCAL_STORAGE_KEYS.customers, JSON.stringify(filtered));
+        safeStorage.setItem(LOCAL_STORAGE_KEYS.customers, JSON.stringify(filtered));
         return;
       }
       const response = await fetch(`/api/customers/${id}`, {
@@ -219,7 +271,7 @@ export const api = {
   sales: {
     list: async (): Promise<Sale[]> => {
       if (await ensureFallbackChecked()) {
-        return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.sales) || '[]');
+        return safeGetLocalStorageList<Sale>(LOCAL_STORAGE_KEYS.sales);
       }
       const response = await fetch('/api/sales', {
         headers: await getHeaders(),
@@ -229,11 +281,11 @@ export const api = {
     },
     create: async (data: Omit<Sale, 'id'>): Promise<string> => {
       if (await ensureFallbackChecked()) {
-        const list = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.sales) || '[]');
+        const list = safeGetLocalStorageList<Sale>(LOCAL_STORAGE_KEYS.sales);
         const id = (Date.now() + Math.floor(Math.random() * 1000)).toString();
         const newItem = { id, ...data };
         list.push(newItem);
-        localStorage.setItem(LOCAL_STORAGE_KEYS.sales, JSON.stringify(list));
+        safeStorage.setItem(LOCAL_STORAGE_KEYS.sales, JSON.stringify(list));
         return id;
       }
       const response = await fetch('/api/sales', {
@@ -247,9 +299,9 @@ export const api = {
     },
     delete: async (id: string): Promise<void> => {
       if (await ensureFallbackChecked()) {
-        const list = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.sales) || '[]');
+        const list = safeGetLocalStorageList<Sale>(LOCAL_STORAGE_KEYS.sales);
         const filtered = list.filter((s: any) => s.id.toString() !== id.toString());
-        localStorage.setItem(LOCAL_STORAGE_KEYS.sales, JSON.stringify(filtered));
+        safeStorage.setItem(LOCAL_STORAGE_KEYS.sales, JSON.stringify(filtered));
         return;
       }
       const response = await fetch(`/api/sales/${id}`, {
@@ -263,7 +315,7 @@ export const api = {
   expenses: {
     list: async (): Promise<Expense[]> => {
       if (await ensureFallbackChecked()) {
-        return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.expenses) || '[]');
+        return safeGetLocalStorageList<Expense>(LOCAL_STORAGE_KEYS.expenses);
       }
       const response = await fetch('/api/expenses', {
         headers: await getHeaders(),
@@ -273,11 +325,11 @@ export const api = {
     },
     create: async (data: Omit<Expense, 'id'>): Promise<string> => {
       if (await ensureFallbackChecked()) {
-        const list = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.expenses) || '[]');
+        const list = safeGetLocalStorageList<Expense>(LOCAL_STORAGE_KEYS.expenses);
         const id = (Date.now() + Math.floor(Math.random() * 1000)).toString();
         const newItem = { id, ...data };
         list.push(newItem);
-        localStorage.setItem(LOCAL_STORAGE_KEYS.expenses, JSON.stringify(list));
+        safeStorage.setItem(LOCAL_STORAGE_KEYS.expenses, JSON.stringify(list));
         return id;
       }
       const response = await fetch('/api/expenses', {
@@ -291,9 +343,9 @@ export const api = {
     },
     delete: async (id: string): Promise<void> => {
       if (await ensureFallbackChecked()) {
-        const list = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.expenses) || '[]');
+        const list = safeGetLocalStorageList<Expense>(LOCAL_STORAGE_KEYS.expenses);
         const filtered = list.filter((e: any) => e.id.toString() !== id.toString());
-        localStorage.setItem(LOCAL_STORAGE_KEYS.expenses, JSON.stringify(filtered));
+        safeStorage.setItem(LOCAL_STORAGE_KEYS.expenses, JSON.stringify(filtered));
         return;
       }
       const response = await fetch(`/api/expenses/${id}`, {
@@ -307,7 +359,7 @@ export const api = {
   transactions: {
     list: async (): Promise<Transaction[]> => {
       if (await ensureFallbackChecked()) {
-        const list = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.transactions) || '[]');
+        const list = safeGetLocalStorageList<Transaction>(LOCAL_STORAGE_KEYS.transactions);
         return list.sort((a: any, b: any) => b.date.localeCompare(a.date));
       }
       const response = await fetch('/api/transactions', {
@@ -318,11 +370,11 @@ export const api = {
     },
     create: async (data: Omit<Transaction, 'id'>): Promise<string> => {
       if (await ensureFallbackChecked()) {
-        const list = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.transactions) || '[]');
+        const list = safeGetLocalStorageList<Transaction>(LOCAL_STORAGE_KEYS.transactions);
         const id = (Date.now() + Math.floor(Math.random() * 1000)).toString();
         const newItem = { id, ...data };
         list.push(newItem);
-        localStorage.setItem(LOCAL_STORAGE_KEYS.transactions, JSON.stringify(list));
+        safeStorage.setItem(LOCAL_STORAGE_KEYS.transactions, JSON.stringify(list));
         return id;
       }
       const response = await fetch('/api/transactions', {
@@ -336,9 +388,9 @@ export const api = {
     },
     delete: async (id: string): Promise<void> => {
       if (await ensureFallbackChecked()) {
-        const list = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.transactions) || '[]');
+        const list = safeGetLocalStorageList<Transaction>(LOCAL_STORAGE_KEYS.transactions);
         const filtered = list.filter((t: any) => t.id.toString() !== id.toString());
-        localStorage.setItem(LOCAL_STORAGE_KEYS.transactions, JSON.stringify(filtered));
+        safeStorage.setItem(LOCAL_STORAGE_KEYS.transactions, JSON.stringify(filtered));
         return;
       }
       const response = await fetch(`/api/transactions/${id}`, {
@@ -352,7 +404,7 @@ export const api = {
   accounts: {
     list: async (): Promise<Account[]> => {
       if (await ensureFallbackChecked()) {
-        return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.accounts) || '[]');
+        return safeGetLocalStorageList<Account>(LOCAL_STORAGE_KEYS.accounts);
       }
       const response = await fetch('/api/accounts', {
         headers: await getHeaders(),
@@ -362,11 +414,11 @@ export const api = {
     },
     create: async (data: Omit<Account, 'id'>): Promise<string> => {
       if (await ensureFallbackChecked()) {
-        const list = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.accounts) || '[]');
+        const list = safeGetLocalStorageList<Account>(LOCAL_STORAGE_KEYS.accounts);
         const id = (Date.now() + Math.floor(Math.random() * 1000)).toString();
         const newItem = { id, ...data };
         list.push(newItem);
-        localStorage.setItem(LOCAL_STORAGE_KEYS.accounts, JSON.stringify(list));
+        safeStorage.setItem(LOCAL_STORAGE_KEYS.accounts, JSON.stringify(list));
         return id;
       }
       const response = await fetch('/api/accounts', {
@@ -380,11 +432,11 @@ export const api = {
     },
     updateStatus: async (id: string, status: 'Pendiente' | 'Pagado'): Promise<void> => {
       if (await ensureFallbackChecked()) {
-        const list = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.accounts) || '[]');
+        const list = safeGetLocalStorageList<Account>(LOCAL_STORAGE_KEYS.accounts);
         const index = list.findIndex((a: any) => a.id.toString() === id.toString());
         if (index !== -1) {
           list[index].status = status;
-          localStorage.setItem(LOCAL_STORAGE_KEYS.accounts, JSON.stringify(list));
+          safeStorage.setItem(LOCAL_STORAGE_KEYS.accounts, JSON.stringify(list));
         }
         return;
       }
@@ -397,9 +449,9 @@ export const api = {
     },
     delete: async (id: string): Promise<void> => {
       if (await ensureFallbackChecked()) {
-        const list = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.accounts) || '[]');
+        const list = safeGetLocalStorageList<Account>(LOCAL_STORAGE_KEYS.accounts);
         const filtered = list.filter((a: any) => a.id.toString() !== id.toString());
-        localStorage.setItem(LOCAL_STORAGE_KEYS.accounts, JSON.stringify(filtered));
+        safeStorage.setItem(LOCAL_STORAGE_KEYS.accounts, JSON.stringify(filtered));
         return;
       }
       const response = await fetch(`/api/accounts/${id}`, {
