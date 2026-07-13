@@ -103,27 +103,37 @@ export function ensureFallbackChecked(): Promise<boolean> {
   checkPromise = (async () => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1200);
+      // Use a generous 12-second timeout to safely handle cold-starts of server containers and CDN routing/SSL delays under Cloudflare.
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
       const res = await fetch('/api/health', { signal: controller.signal });
       clearTimeout(timeoutId);
+      
       if (res.ok) {
-        const contentType = res.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
+        try {
           const data = await res.json();
-          isLocalFallback = data.status !== 'ok';
-        } else {
-          isLocalFallback = true;
+          isLocalFallback = data?.status !== 'ok';
+        } catch (jsonErr) {
+          // If JSON parsing fails but res.ok is 200 (e.g. proxy stripped headers or returned text), try reading as text
+          try {
+            const text = await fetch('/api/health').then(r => r.text());
+            isLocalFallback = !text.includes('ok');
+          } catch (textErr) {
+            isLocalFallback = false; // We got 200 OK, assume healthy
+          }
         }
       } else {
         isLocalFallback = true;
       }
     } catch (err) {
+      console.warn('[API] Health check probe failed/timed out, using fallback. Error:', err);
       isLocalFallback = true;
     }
     
     if (isLocalFallback) {
       console.warn('[API] Backend is unavailable. Automatically switching to client-side safeStorage fallback database.');
       initializeLocalStorageSeed();
+    } else {
+      console.log('[API] Backend is available. Connected successfully to Cloud Mode.');
     }
     return isLocalFallback;
   })();

@@ -195,6 +195,11 @@ async function startServer() {
 
   // API Health Endpoint
   app.get("/api/health", (req, res) => {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    });
     res.json({ status: "ok" });
   });
 
