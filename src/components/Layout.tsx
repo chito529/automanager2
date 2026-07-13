@@ -2,7 +2,8 @@ import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, CarFront, FileText, Users, ShoppingCart, 
-  ArrowLeftRight, Wallet, Receipt, Bell, BarChart3, LogOut
+  ArrowLeftRight, Wallet, Receipt, Bell, BarChart3, LogOut,
+  Database, RefreshCw, CheckCircle2, XCircle, AlertCircle, ExternalLink, Lock
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -27,10 +28,53 @@ export default function Layout() {
   const { currency, setCurrency } = useSettings();
   const user = auth.currentUser;
   const [isLocal, setIsLocal] = React.useState(false);
+  
+  // Connection Modal Settings
+  const [isConnModalOpen, setIsConnModalOpen] = React.useState(false);
+  const [backendUrl, setBackendUrl] = React.useState(localStorage.getItem('auto_manager_backend_url') || '');
+  const [forceCloud, setForceCloud] = React.useState(localStorage.getItem('auto_manager_force_cloud') === 'true');
+  const [isTesting, setIsTesting] = React.useState(false);
+  const [testResult, setTestResult] = React.useState<'success' | 'success_forced' | 'failed_local' | 'error' | null>(null);
 
   React.useEffect(() => {
     ensureFallbackChecked().then(local => setIsLocal(local));
   }, []);
+
+  const handleSaveAndTest = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      if (backendUrl.trim()) {
+        localStorage.setItem('auto_manager_backend_url', backendUrl.trim());
+      } else {
+        localStorage.removeItem('auto_manager_backend_url');
+      }
+
+      if (forceCloud) {
+        localStorage.setItem('auto_manager_force_cloud', 'true');
+      } else {
+        localStorage.removeItem('auto_manager_force_cloud');
+      }
+
+      // Re-trigger health check probe with forceRefresh=true
+      const isStillLocal = await ensureFallbackChecked(true);
+      setIsLocal(isStillLocal);
+
+      if (forceCloud) {
+        setTestResult('success_forced');
+      } else {
+        if (!isStillLocal) {
+          setTestResult('success');
+        } else {
+          setTestResult('failed_local');
+        }
+      }
+    } catch (err: any) {
+      setTestResult('error');
+    } finally {
+      setIsTesting(false);
+    }
+  };
 
   const handleSignOut = () => {
     auth.signOut();
@@ -95,17 +139,23 @@ export default function Layout() {
             {navigation.find(n => n.href === location.pathname)?.name || 'AutoManager'}
           </h1>
           <div className="flex gap-3 items-center">
-            {isLocal ? (
-              <span className="text-[11px] bg-amber-500/10 text-amber-400 px-3 py-1 border border-amber-500/20 rounded-full font-medium flex items-center gap-1.5" title="La base de datos del servidor no está disponible. Usando almacenamiento local seguro del navegador.">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-                Modo Local
-              </span>
-            ) : (
-              <span className="text-[11px] bg-emerald-500/10 text-emerald-400 px-3 py-1 border border-emerald-500/20 rounded-full font-medium flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                Modo Nube
-              </span>
-            )}
+            <button 
+              onClick={() => setIsConnModalOpen(true)}
+              className="hover:scale-105 active:scale-95 transition-all cursor-pointer focus:outline-none"
+              title="Configuración de Conexión de Base de Datos"
+            >
+              {isLocal ? (
+                <span className="text-[11px] bg-amber-500/10 text-amber-400 px-3 py-1 border border-amber-500/20 rounded-full font-medium flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                  Modo Local
+                </span>
+              ) : (
+                <span className="text-[11px] bg-emerald-500/10 text-emerald-400 px-3 py-1 border border-emerald-500/20 rounded-full font-medium flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                  Modo Nube
+                </span>
+              )}
+            </button>
             <span className="text-[11px] bg-indigo-900/40 text-indigo-300 px-3 py-1 border border-indigo-800/60 rounded-full font-semibold">
               USD ($)
             </span>
@@ -120,6 +170,176 @@ export default function Layout() {
           </div>
         </main>
       </div>
+
+      {/* Database Connection Settings Modal */}
+      {isConnModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Database className="h-5 w-5 text-indigo-400" />
+                <h3 className="text-base font-semibold text-white">Centro de Conexión de Base de Datos</h3>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsConnModalOpen(false);
+                  setTestResult(null);
+                }}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
+              {/* Status Banner */}
+              <div className={cn(
+                "p-4 rounded-lg border flex items-start gap-3",
+                isLocal 
+                  ? "bg-amber-500/10 border-amber-500/20 text-amber-300"
+                  : "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+              )}>
+                {isLocal ? (
+                  <AlertCircle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+                ) : (
+                  <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <h4 className="font-semibold text-sm">
+                    {isLocal ? 'Modo de Almacenamiento Local Activo' : 'Conectado a la Base de Datos en la Nube'}
+                  </h4>
+                  <p className="text-xs mt-1 text-slate-400 leading-relaxed">
+                    {isLocal 
+                      ? 'La aplicación está operando offline e independiente en tu navegador usando almacenamiento local seguro (localStorage). Los cambios no se guardan en el servidor.'
+                      : 'La aplicación está comunicándose de forma exitosa con el servidor en la nube y la base de datos de producción.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Form Settings */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">
+                    URL del Backend Express (Opcional)
+                  </label>
+                  <input 
+                    type="text" 
+                    value={backendUrl}
+                    onChange={(e) => setBackendUrl(e.target.value)}
+                    placeholder="https://tu-api.ejemplo.com (dejar vacío para relativo)"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+                    Útil si estás hospedando la interfaz estática en <strong>Cloudflare Pages</strong> y la API está en otro servidor, como <strong>Cloud Run</strong>. De lo contrario, déjalo en blanco.
+                  </p>
+                </div>
+
+                <div className="bg-slate-950/40 p-4 border border-slate-800/60 rounded-lg space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Lock className="h-4 w-4 text-indigo-400" />
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">Forzar Modo Nube</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={forceCloud}
+                        onChange={(e) => setForceCloud(e.target.checked)}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 peer-checked:after:bg-white peer-checked:after:border-transparent"></div>
+                    </label>
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Si tu proxy (Cloudflare, etc.) bloquea la ruta de prueba rápida (<code className="bg-slate-900 px-1 py-0.5 rounded text-indigo-300">/api/health</code>) pero la API funciona normalmente, activa esta opción para ignorar el check y forzar la sincronización en la nube.
+                  </p>
+                </div>
+              </div>
+
+              {/* Cloudflare Guide */}
+              <div className="bg-indigo-950/20 border border-indigo-900/30 rounded-lg p-4 space-y-2 text-xs text-indigo-300">
+                <div className="font-semibold flex items-center gap-1.5">
+                  <ExternalLink className="h-4 w-4 shrink-0" />
+                  ¿Soportando Cloudflare? Tips importantes:
+                </div>
+                <ul className="list-disc pl-4 space-y-1 text-slate-400 leading-relaxed">
+                  <li>
+                    Asegúrate de que el modo de encriptación <strong>SSL/TLS</strong> esté configurado como <strong>Full</strong> o <strong>Full (strict)</strong> en Cloudflare para evitar loops de redirección infinita.
+                  </li>
+                  <li>
+                    Verifica que las reglas de caché de Cloudflare no bloqueen ni cacheen las respuestas de las rutas API (<code className="bg-slate-900 text-indigo-200 px-1 rounded">/api/*</code>).
+                  </li>
+                </ul>
+              </div>
+
+              {/* Test Results Display */}
+              {testResult && (
+                <div className={cn(
+                  "p-3 rounded-lg border text-xs flex items-center gap-2",
+                  testResult === 'success' && "bg-emerald-500/10 border-emerald-500/20 text-emerald-300",
+                  testResult === 'success_forced' && "bg-indigo-500/10 border-indigo-500/20 text-indigo-300",
+                  testResult === 'failed_local' && "bg-amber-500/10 border-amber-500/20 text-amber-300",
+                  testResult === 'error' && "bg-red-500/10 border-red-500/20 text-red-300"
+                )}>
+                  {testResult === 'success' && (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                      <span>¡Prueba exitosa! Conexión activa con el Servidor en la Nube.</span>
+                    </>
+                  )}
+                  {testResult === 'success_forced' && (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-indigo-400 shrink-0" />
+                      <span>Sincronización de Nube Forzada. El sistema ignorará futuras fallas en pruebas rápidas.</span>
+                    </>
+                  )}
+                  {testResult === 'failed_local' && (
+                    <>
+                      <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />
+                      <span>El servidor backend no respondió de manera esperada. Revertido a Modo Local para proteger tus datos.</span>
+                    </>
+                  )}
+                  {testResult === 'error' && (
+                    <>
+                      <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+                      <span>Error desconocido al conectar con el servidor backend.</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-end gap-3 shrink-0">
+              <button
+                onClick={() => {
+                  setIsConnModalOpen(false);
+                  setTestResult(null);
+                }}
+                className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-900 rounded-lg transition-colors"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={handleSaveAndTest}
+                disabled={isTesting}
+                className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-55"
+              >
+                {isTesting ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    Probando...
+                  </>
+                ) : (
+                  'Guardar y Probar Conexión'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

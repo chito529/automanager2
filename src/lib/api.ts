@@ -94,18 +94,36 @@ function initializeLocalStorageSeed() {
   }
 }
 
+export function getApiUrl(path: string): string {
+  const customUrl = safeStorage.getItem('auto_manager_backend_url') || '';
+  const baseUrl = customUrl.trim().replace(/\/$/, '');
+  return baseUrl ? `${baseUrl}${path}` : path;
+}
+
 let isLocalFallback = false;
 let checkPromise: Promise<boolean> | null = null;
 
-export function ensureFallbackChecked(): Promise<boolean> {
+export function ensureFallbackChecked(forceRefresh = false): Promise<boolean> {
+  if (forceRefresh) {
+    checkPromise = null;
+  }
   if (checkPromise) return checkPromise;
 
   checkPromise = (async () => {
+    // Check if user manually forced Cloud Mode (ideal for custom deployments behind proxies like Cloudflare)
+    const forced = safeStorage.getItem('auto_manager_force_cloud');
+    if (forced === 'true') {
+      console.log('[API] Cloud Mode manually forced by user setting.');
+      isLocalFallback = false;
+      return false;
+    }
+
     try {
+      const healthUrl = getApiUrl('/api/health');
       const controller = new AbortController();
       // Use a generous 12-second timeout to safely handle cold-starts of server containers and CDN routing/SSL delays under Cloudflare.
       const timeoutId = setTimeout(() => controller.abort(), 12000);
-      const res = await fetch('/api/health', { signal: controller.signal });
+      const res = await fetch(healthUrl, { signal: controller.signal });
       clearTimeout(timeoutId);
       
       if (res.ok) {
@@ -115,7 +133,7 @@ export function ensureFallbackChecked(): Promise<boolean> {
         } catch (jsonErr) {
           // If JSON parsing fails but res.ok is 200 (e.g. proxy stripped headers or returned text), try reading as text
           try {
-            const text = await fetch('/api/health').then(r => r.text());
+            const text = await fetch(healthUrl).then(r => r.text());
             isLocalFallback = !text.includes('ok');
           } catch (textErr) {
             isLocalFallback = false; // We got 200 OK, assume healthy
@@ -161,7 +179,7 @@ export const api = {
       if (await ensureFallbackChecked()) {
         return safeGetLocalStorageList<Vehicle>(LOCAL_STORAGE_KEYS.vehicles);
       }
-      const response = await fetch('/api/vehicles', {
+      const response = await fetch(getApiUrl('/api/vehicles'), {
         headers: await getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch vehicles');
@@ -176,7 +194,7 @@ export const api = {
         safeStorage.setItem(LOCAL_STORAGE_KEYS.vehicles, JSON.stringify(list));
         return id;
       }
-      const response = await fetch('/api/vehicles', {
+      const response = await fetch(getApiUrl('/api/vehicles'), {
         method: 'POST',
         headers: await getHeaders(),
         body: JSON.stringify(data),
@@ -195,7 +213,7 @@ export const api = {
         }
         return;
       }
-      const response = await fetch(`/api/vehicles/${id}`, {
+      const response = await fetch(getApiUrl(`/api/vehicles/${id}`), {
         method: 'PATCH',
         headers: await getHeaders(),
         body: JSON.stringify(data),
@@ -209,7 +227,7 @@ export const api = {
         safeStorage.setItem(LOCAL_STORAGE_KEYS.vehicles, JSON.stringify(filtered));
         return;
       }
-      const response = await fetch(`/api/vehicles/${id}`, {
+      const response = await fetch(getApiUrl(`/api/vehicles/${id}`), {
         method: 'DELETE',
         headers: await getHeaders(),
       });
@@ -222,7 +240,7 @@ export const api = {
       if (await ensureFallbackChecked()) {
         return safeGetLocalStorageList<Customer>(LOCAL_STORAGE_KEYS.customers);
       }
-      const response = await fetch('/api/customers', {
+      const response = await fetch(getApiUrl('/api/customers'), {
         headers: await getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch customers');
@@ -237,7 +255,7 @@ export const api = {
         safeStorage.setItem(LOCAL_STORAGE_KEYS.customers, JSON.stringify(list));
         return id;
       }
-      const response = await fetch('/api/customers', {
+      const response = await fetch(getApiUrl('/api/customers'), {
         method: 'POST',
         headers: await getHeaders(),
         body: JSON.stringify(data),
@@ -256,7 +274,7 @@ export const api = {
         }
         return;
       }
-      const response = await fetch(`/api/customers/${id}`, {
+      const response = await fetch(getApiUrl(`/api/customers/${id}`), {
         method: 'PATCH',
         headers: await getHeaders(),
         body: JSON.stringify(data),
@@ -270,7 +288,7 @@ export const api = {
         safeStorage.setItem(LOCAL_STORAGE_KEYS.customers, JSON.stringify(filtered));
         return;
       }
-      const response = await fetch(`/api/customers/${id}`, {
+      const response = await fetch(getApiUrl(`/api/customers/${id}`), {
         method: 'DELETE',
         headers: await getHeaders(),
       });
@@ -283,7 +301,7 @@ export const api = {
       if (await ensureFallbackChecked()) {
         return safeGetLocalStorageList<Sale>(LOCAL_STORAGE_KEYS.sales);
       }
-      const response = await fetch('/api/sales', {
+      const response = await fetch(getApiUrl('/api/sales'), {
         headers: await getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch sales');
@@ -298,7 +316,7 @@ export const api = {
         safeStorage.setItem(LOCAL_STORAGE_KEYS.sales, JSON.stringify(list));
         return id;
       }
-      const response = await fetch('/api/sales', {
+      const response = await fetch(getApiUrl('/api/sales'), {
         method: 'POST',
         headers: await getHeaders(),
         body: JSON.stringify(data),
@@ -314,7 +332,7 @@ export const api = {
         safeStorage.setItem(LOCAL_STORAGE_KEYS.sales, JSON.stringify(filtered));
         return;
       }
-      const response = await fetch(`/api/sales/${id}`, {
+      const response = await fetch(getApiUrl(`/api/sales/${id}`), {
         method: 'DELETE',
         headers: await getHeaders(),
       });
@@ -327,7 +345,7 @@ export const api = {
       if (await ensureFallbackChecked()) {
         return safeGetLocalStorageList<Expense>(LOCAL_STORAGE_KEYS.expenses);
       }
-      const response = await fetch('/api/expenses', {
+      const response = await fetch(getApiUrl('/api/expenses'), {
         headers: await getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch expenses');
@@ -342,7 +360,7 @@ export const api = {
         safeStorage.setItem(LOCAL_STORAGE_KEYS.expenses, JSON.stringify(list));
         return id;
       }
-      const response = await fetch('/api/expenses', {
+      const response = await fetch(getApiUrl('/api/expenses'), {
         method: 'POST',
         headers: await getHeaders(),
         body: JSON.stringify(data),
@@ -358,7 +376,7 @@ export const api = {
         safeStorage.setItem(LOCAL_STORAGE_KEYS.expenses, JSON.stringify(filtered));
         return;
       }
-      const response = await fetch(`/api/expenses/${id}`, {
+      const response = await fetch(getApiUrl(`/api/expenses/${id}`), {
         method: 'DELETE',
         headers: await getHeaders(),
       });
@@ -372,7 +390,7 @@ export const api = {
         const list = safeGetLocalStorageList<Transaction>(LOCAL_STORAGE_KEYS.transactions);
         return list.sort((a: any, b: any) => b.date.localeCompare(a.date));
       }
-      const response = await fetch('/api/transactions', {
+      const response = await fetch(getApiUrl('/api/transactions'), {
         headers: await getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch transactions');
@@ -387,7 +405,7 @@ export const api = {
         safeStorage.setItem(LOCAL_STORAGE_KEYS.transactions, JSON.stringify(list));
         return id;
       }
-      const response = await fetch('/api/transactions', {
+      const response = await fetch(getApiUrl('/api/transactions'), {
         method: 'POST',
         headers: await getHeaders(),
         body: JSON.stringify(data),
@@ -403,7 +421,7 @@ export const api = {
         safeStorage.setItem(LOCAL_STORAGE_KEYS.transactions, JSON.stringify(filtered));
         return;
       }
-      const response = await fetch(`/api/transactions/${id}`, {
+      const response = await fetch(getApiUrl(`/api/transactions/${id}`), {
         method: 'DELETE',
         headers: await getHeaders(),
       });
@@ -416,7 +434,7 @@ export const api = {
       if (await ensureFallbackChecked()) {
         return safeGetLocalStorageList<Account>(LOCAL_STORAGE_KEYS.accounts);
       }
-      const response = await fetch('/api/accounts', {
+      const response = await fetch(getApiUrl('/api/accounts'), {
         headers: await getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch accounts');
@@ -431,7 +449,7 @@ export const api = {
         safeStorage.setItem(LOCAL_STORAGE_KEYS.accounts, JSON.stringify(list));
         return id;
       }
-      const response = await fetch('/api/accounts', {
+      const response = await fetch(getApiUrl('/api/accounts'), {
         method: 'POST',
         headers: await getHeaders(),
         body: JSON.stringify(data),
@@ -450,7 +468,7 @@ export const api = {
         }
         return;
       }
-      const response = await fetch(`/api/accounts/${id}/status`, {
+      const response = await fetch(getApiUrl(`/api/accounts/${id}/status`), {
         method: 'PATCH',
         headers: await getHeaders(),
         body: JSON.stringify({ status }),
@@ -464,7 +482,7 @@ export const api = {
         safeStorage.setItem(LOCAL_STORAGE_KEYS.accounts, JSON.stringify(filtered));
         return;
       }
-      const response = await fetch(`/api/accounts/${id}`, {
+      const response = await fetch(getApiUrl(`/api/accounts/${id}`), {
         method: 'DELETE',
         headers: await getHeaders(),
       });
