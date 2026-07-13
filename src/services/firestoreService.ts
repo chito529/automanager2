@@ -26,14 +26,16 @@ async function checkPostgres(): Promise<boolean> {
   if (isPgOffline !== null) return !isPgOffline;
   try {
     // Probe Postgres availability by running a limited schema query
+    // Use a generous 10-second timeout for the initial connection/cold start
     await Promise.race([
       pgDb.select().from(schema.users).limit(1),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout after 10000ms establishing PostgreSQL connection')), 10000))
     ]);
+    console.log('[Postgres] Connection probe succeeded. Database is ONLINE.');
     isPgOffline = false;
     return true;
-  } catch (err) {
-    console.warn('[Postgres] Connection failed. Seamlessly falling back to Firestore-only primary database mode.', err);
+  } catch (err: any) {
+    console.warn('[Postgres] Connection failed. Seamlessly falling back to Firestore-only primary database mode. Details:', err?.message || err);
     isPgOffline = true;
     return false;
   }
