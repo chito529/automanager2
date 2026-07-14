@@ -94,10 +94,26 @@ function initializeLocalStorageSeed() {
   }
 }
 
+let lastResolvedPath = '';
+
 export function getApiUrl(path: string): string {
+  lastResolvedPath = path;
   const customUrl = safeStorage.getItem('auto_manager_backend_url') || 'https://automanager-backend.juanalmiron529.workers.dev';
   const baseUrl = customUrl.trim().replace(/\/$/, '');
-  return baseUrl ? `${baseUrl}${path}` : path;
+  
+  // Option: Use CORS Proxy
+  const useCorsProxy = safeStorage.getItem('auto_manager_use_cors_proxy') === 'true';
+  if (useCorsProxy && baseUrl) {
+    return '/api/proxy';
+  }
+
+  // Option: Remove '/api' prefix
+  let resolvedPath = path;
+  if (safeStorage.getItem('auto_manager_remove_api_prefix') === 'true') {
+    resolvedPath = path.replace(/^\/api/, '');
+  }
+
+  return baseUrl ? `${baseUrl}${resolvedPath}` : resolvedPath;
 }
 
 let isLocalFallback = false;
@@ -179,10 +195,14 @@ async function handleResponseError(response: Response, defaultMessage: string): 
 }
 
 // Helper to get auth headers
-async function getHeaders() {
+async function getHeaders(originalPath?: string) {
   const user = auth.currentUser;
   let token = '';
-  if (user) {
+  
+  // Option: Send Authorization token
+  const sendAuth = safeStorage.getItem('auto_manager_send_auth') !== 'false';
+
+  if (user && sendAuth) {
     try {
       // Modern standard way to encode UTF-8 JSON to Base64 safely in any browser/client
       const jsonStr = JSON.stringify(user);
@@ -195,10 +215,33 @@ async function getHeaders() {
       token = btoa(unescape(encodeURIComponent(JSON.stringify(user))));
     }
   }
-  return {
+
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
   };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  // If using CORS Proxy, calculate and append the target URL header
+  const useCorsProxy = safeStorage.getItem('auto_manager_use_cors_proxy') === 'true';
+  const targetPath = originalPath || lastResolvedPath;
+  if (useCorsProxy && targetPath) {
+    const customUrl = safeStorage.getItem('auto_manager_backend_url') || 'https://automanager-backend.juanalmiron529.workers.dev';
+    const baseUrl = customUrl.trim().replace(/\/$/, '');
+    
+    let resolvedPath = targetPath;
+    if (safeStorage.getItem('auto_manager_remove_api_prefix') === 'true') {
+      resolvedPath = targetPath.replace(/^\/api/, '');
+    }
+    
+    if (baseUrl) {
+      headers['x-target-url'] = `${baseUrl}${resolvedPath}`;
+    }
+  }
+
+  return headers;
 }
 
 export const api = {

@@ -33,6 +33,9 @@ export default function Layout() {
   const [isConnModalOpen, setIsConnModalOpen] = React.useState(false);
   const [backendUrl, setBackendUrl] = React.useState(localStorage.getItem('auto_manager_backend_url') || 'https://automanager-backend.juanalmiron529.workers.dev');
   const [forceCloud, setForceCloud] = React.useState(localStorage.getItem('auto_manager_force_cloud') !== 'false');
+  const [removeApiPrefix, setRemoveApiPrefix] = React.useState(localStorage.getItem('auto_manager_remove_api_prefix') === 'true');
+  const [sendAuth, setSendAuth] = React.useState(localStorage.getItem('auto_manager_send_auth') !== 'false');
+  const [useCorsProxy, setUseCorsProxy] = React.useState(localStorage.getItem('auto_manager_use_cors_proxy') === 'true');
   const [isTesting, setIsTesting] = React.useState(false);
   const [testResult, setTestResult] = React.useState<'success' | 'success_forced' | 'failed_local' | 'error' | null>(null);
 
@@ -55,6 +58,10 @@ export default function Layout() {
       } else {
         localStorage.setItem('auto_manager_force_cloud', 'false');
       }
+
+      localStorage.setItem('auto_manager_remove_api_prefix', removeApiPrefix ? 'true' : 'false');
+      localStorage.setItem('auto_manager_send_auth', sendAuth ? 'true' : 'false');
+      localStorage.setItem('auto_manager_use_cors_proxy', useCorsProxy ? 'true' : 'false');
 
       // Re-trigger health check probe with forceRefresh=true
       const isStillLocal = await ensureFallbackChecked(true);
@@ -236,8 +243,9 @@ export default function Layout() {
                   </p>
                 </div>
 
-                <div className="bg-slate-950/40 p-4 border border-slate-800/60 rounded-lg space-y-3">
-                  <div className="flex items-center justify-between">
+                <div className="bg-slate-950/40 p-4 border border-slate-800/60 rounded-lg space-y-4">
+                  {/* Forzar Modo Nube */}
+                  <div className="flex items-center justify-between border-b border-slate-800/50 pb-3">
                     <div className="flex items-center gap-2">
                       <Lock className="h-4 w-4 text-indigo-400" />
                       <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">Forzar Modo Nube</span>
@@ -252,8 +260,69 @@ export default function Layout() {
                       <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 peer-checked:after:bg-white peer-checked:after:border-transparent"></div>
                     </label>
                   </div>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    Si tu proxy (Cloudflare, etc.) bloquea la ruta de prueba rápida (<code className="bg-slate-900 px-1 py-0.5 rounded text-indigo-300">/api/health</code>) pero la API funciona normalmente, activa esta opción para ignorar el check y forzar la sincronización en la nube.
+
+                  {/* Evitar CORS Proxy */}
+                  <div className="flex items-center justify-between border-b border-slate-800/50 pb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Database className="h-4 w-4 text-emerald-400" />
+                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">Proxy CORS de Emergencia</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5">Enruta peticiones a través del servidor local para evitar bloqueos CORS del navegador.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={useCorsProxy}
+                        onChange={(e) => setUseCorsProxy(e.target.checked)}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 peer-checked:after:bg-white peer-checked:after:border-transparent"></div>
+                    </label>
+                  </div>
+
+                  {/* Quitar prefijo /api */}
+                  <div className="flex items-center justify-between border-b border-slate-800/50 pb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <ExternalLink className="h-4 w-4 text-indigo-400" />
+                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">Quitar prefijo /api</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5">Llama a endpoints limpios (ej: <code className="text-indigo-300">/vehicles</code> en lugar de <code className="text-indigo-300">/api/vehicles</code>).</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={removeApiPrefix}
+                        onChange={(e) => setRemoveApiPrefix(e.target.checked)}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 peer-checked:after:bg-white peer-checked:after:border-transparent"></div>
+                    </label>
+                  </div>
+
+                  {/* Enviar Auth Header */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Lock className="h-4 w-4 text-amber-400" />
+                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">Enviar Credenciales</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5">Desactívalo si tu Worker no maneja tokens de autenticación para simplificar preflight OPTIONS.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={sendAuth}
+                        onChange={(e) => setSendAuth(e.target.checked)}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 peer-checked:after:bg-white peer-checked:after:border-transparent"></div>
+                    </label>
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 leading-relaxed pt-2 border-t border-slate-800/40">
+                    Ajusta estas configuraciones avanzadas si tu API de Cloudflare Workers retorna <code className="bg-slate-900 px-1 py-0.5 rounded text-red-400">NetworkError</code>. ¡El <strong>Proxy CORS de Emergencia</strong> es altamente recomendado si tienes bloqueos de origen!
                   </p>
                 </div>
               </div>
