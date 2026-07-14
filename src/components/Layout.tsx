@@ -156,10 +156,15 @@ export default function Layout() {
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse"></span>
                   Modo Local
                 </span>
-              ) : (
+              ) : useCorsProxy ? (
                 <span className="text-[11px] bg-emerald-500/10 text-emerald-400 px-3 py-1 border border-emerald-500/20 rounded-full font-medium flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                  Modo Nube
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Modo Nube (Proxy)
+                </span>
+              ) : (
+                <span className="text-[11px] bg-sky-500/10 text-sky-400 px-3 py-1 border border-sky-500/20 rounded-full font-medium flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-400"></span>
+                  Modo Nube (Directo)
                 </span>
               )}
             </button>
@@ -206,21 +211,31 @@ export default function Layout() {
                 "p-4 rounded-lg border flex items-start gap-3",
                 isLocal 
                   ? "bg-amber-500/10 border-amber-500/20 text-amber-300"
-                  : "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                  : useCorsProxy
+                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                    : "bg-sky-500/10 border-sky-500/20 text-sky-300"
               )}>
                 {isLocal ? (
                   <AlertCircle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
-                ) : (
+                ) : useCorsProxy ? (
                   <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+                ) : (
+                  <CheckCircle2 className="h-5 w-5 text-sky-400 shrink-0 mt-0.5" />
                 )}
                 <div>
                   <h4 className="font-semibold text-sm">
-                    {isLocal ? 'Modo de Almacenamiento Local Activo' : 'Conectado a la Base de Datos en la Nube'}
+                    {isLocal 
+                      ? 'Modo de Almacenamiento Local Activo' 
+                      : useCorsProxy 
+                        ? 'Modo Nube por Proxy Activo' 
+                        : 'Modo Nube Directo Activo'}
                   </h4>
                   <p className="text-xs mt-1 text-slate-400 leading-relaxed">
                     {isLocal 
                       ? 'La aplicación está operando offline e independiente en tu navegador usando almacenamiento local seguro (localStorage). Los cambios no se guardan en el servidor.'
-                      : 'La aplicación está comunicándose de forma exitosa con el servidor en la nube y la base de datos de producción.'}
+                      : useCorsProxy 
+                        ? 'La aplicación está comunicándose de forma exitosa con tu backend externo en la nube a través de nuestro Proxy CORS seguro para evitar restricciones del navegador (CORS / Preflight).'
+                        : 'La aplicación está conectada directamente con tu backend externo en la nube sin usar intermediarios locales.'}
                   </p>
                 </div>
               </div>

@@ -217,6 +217,77 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
+  // Proxy CORS de Emergencia para Backend Externo (Cloudflare Workers + D1)
+  app.all("/api/proxy*", async (req: express.Request, res: express.Response) => {
+    let targetUrlStr = req.headers["x-target-url"];
+    if (!targetUrlStr || typeof targetUrlStr !== "string") {
+      const workerBase = "https://automanager-backend.juanalmiron529.workers.dev";
+      const subpath = req.originalUrl.replace(/^\/api\/proxy/, "");
+      const normalizedSubpath = subpath.startsWith("/") ? subpath : "/" + subpath;
+      targetUrlStr = `${workerBase}${normalizedSubpath}`;
+    }
+
+    try {
+      const targetUrl = new URL(targetUrlStr);
+      // Validar dominio de destino (Allowlist de seguridad para evitar open proxy)
+      const allowedDomain = "juanalmiron529.workers.dev";
+      const isAllowed = targetUrl.hostname === allowedDomain || targetUrl.hostname.endsWith("." + allowedDomain);
+      if (!isAllowed) {
+        return res.status(403).json({ error: "Dominio destino no autorizado para el Proxy CORS." });
+      }
+
+      // Reenviar método y headers autorizados
+      const headers: Record<string, string> = {};
+      const headersToForward = ['authorization', 'content-type', 'accept', 'user-agent'];
+      for (const h of headersToForward) {
+        if (req.headers[h]) {
+          headers[h] = req.headers[h] as string;
+        }
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      const fetchOptions: any = {
+        method: req.method,
+        headers,
+        signal: controller.signal,
+      };
+
+      if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.body) {
+        fetchOptions.body = JSON.stringify(req.body);
+      }
+
+      console.log(`[Proxy Backend] Redireccionando ${req.method} a ${targetUrlStr}`);
+      const response = await fetch(targetUrlStr, fetchOptions);
+      clearTimeout(timeoutId);
+
+      // Copiar headers de respuesta de forma segura
+      const resHeadersToForward = ['content-type', 'cache-control'];
+      for (const h of resHeadersToForward) {
+        const val = response.headers.get(h);
+        if (val) {
+          res.setHeader(h, val);
+        }
+      }
+
+      res.status(response.status);
+
+      const responseText = await response.text();
+      try {
+        const parsed = JSON.parse(responseText);
+        res.json(parsed);
+      } catch {
+        res.send(responseText);
+      }
+    } catch (err: any) {
+      console.error(`[Proxy Backend Error] Error de proxy al conectar con ${targetUrlStr}:`, err);
+      res.status(502).json({
+        error: `Error de Proxy: No se pudo conectar con el backend externo. Detalle: ${err.message || String(err)}`
+      });
+    }
+  });
+
   // ---- SECURE VEHICLES ENDPOINTS ----
   app.get("/api/vehicles", requireAuth, async (req: AuthRequest, res) => {
     try {

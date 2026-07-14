@@ -35,6 +35,10 @@ export default function Vehicles() {
   const [publicationPrice, setPublicationPrice] = useState<number>(0);
   const [salePrice, setSalePrice] = useState<number>(0);
 
+  // Submitting States
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   useEffect(() => {
     loadVehicles();
   }, []);
@@ -73,6 +77,8 @@ export default function Vehicles() {
     setStatus('Comprado');
     setPublicationPrice(0);
     setSalePrice(0);
+    setSubmitError(null);
+    setSubmitting(false);
     setIsModalOpen(true);
   };
 
@@ -88,6 +94,8 @@ export default function Vehicles() {
     setStatus(vehicle.status);
     setPublicationPrice(vehicle.publicationPrice);
     setSalePrice(vehicle.salePrice || 0);
+    setSubmitError(null);
+    setSubmitting(false);
     setIsModalOpen(true);
   };
 
@@ -115,7 +123,7 @@ export default function Vehicles() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!brand.trim() || !model.trim()) {
-      alert('Marca y Modelo son campos requeridos.');
+      setSubmitError('Marca y Modelo son campos requeridos.');
       return;
     }
 
@@ -133,7 +141,8 @@ export default function Vehicles() {
     };
 
     try {
-      setLoading(true);
+      setSubmitting(true);
+      setSubmitError(null);
       if (editingVehicle) {
         await api.vehicles.update(editingVehicle.id, payload);
       } else {
@@ -141,11 +150,11 @@ export default function Vehicles() {
       }
       setIsModalOpen(false);
       await loadVehicles();
-    } catch (e: any) {
-      console.error('Error saving vehicle:', e);
-      alert('Error al guardar el vehículo: ' + (e instanceof Error ? e.message : String(e)));
+    } catch (err: any) {
+      console.error('Error saving vehicle:', err);
+      setSubmitError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -250,6 +259,13 @@ export default function Vehicles() {
                 <X className="h-5 w-5" />
               </button>
             </div>
+
+            {submitError && (
+              <div className="mx-6 mt-4 p-3.5 bg-red-950/50 border border-red-800/60 rounded-lg text-xs text-red-300 leading-relaxed font-sans">
+                <span className="font-semibold block mb-0.5">⚠️ Error al Registrar</span>
+                {submitError}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -378,14 +394,22 @@ export default function Vehicles() {
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   className="px-4 py-2 border border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-sm font-medium rounded-lg transition-colors cursor-pointer"
+                  disabled={submitting}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer shadow-md"
+                  disabled={submitting}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800/70 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer shadow-md flex items-center gap-2"
                 >
-                  {editingVehicle ? 'Guardar Cambios' : 'Registrar'}
+                  {submitting && (
+                    <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                  )}
+                  {submitting ? 'Guardando...' : (editingVehicle ? 'Guardar Cambios' : 'Registrar')}
                 </button>
               </div>
             </form>
