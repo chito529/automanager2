@@ -95,7 +95,7 @@ function initializeLocalStorageSeed() {
 }
 
 export function getApiUrl(path: string): string {
-  const customUrl = safeStorage.getItem('auto_manager_backend_url') || '';
+  const customUrl = safeStorage.getItem('auto_manager_backend_url') || 'https://automanager-backend.juanalmiron529.workers.dev';
   const baseUrl = customUrl.trim().replace(/\/$/, '');
   return baseUrl ? `${baseUrl}${path}` : path;
 }
@@ -111,9 +111,10 @@ export function ensureFallbackChecked(forceRefresh = false): Promise<boolean> {
 
   checkPromise = (async () => {
     // Check if user manually forced Cloud Mode (ideal for custom deployments behind proxies like Cloudflare)
-    const forced = safeStorage.getItem('auto_manager_force_cloud');
-    if (forced === 'true') {
-      console.log('[API] Cloud Mode manually forced by user setting.');
+    // Default to true (not 'false') so that we connect directly to the Workers API.
+    const forced = safeStorage.getItem('auto_manager_force_cloud') !== 'false';
+    if (forced) {
+      console.log('[API] Cloud Mode active (forced/default). Connecting to production backend.');
       isLocalFallback = false;
       return false;
     }

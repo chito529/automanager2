@@ -31,8 +31,8 @@ export default function Layout() {
   
   // Connection Modal Settings
   const [isConnModalOpen, setIsConnModalOpen] = React.useState(false);
-  const [backendUrl, setBackendUrl] = React.useState(localStorage.getItem('auto_manager_backend_url') || '');
-  const [forceCloud, setForceCloud] = React.useState(localStorage.getItem('auto_manager_force_cloud') === 'true');
+  const [backendUrl, setBackendUrl] = React.useState(localStorage.getItem('auto_manager_backend_url') || 'https://automanager-backend.juanalmiron529.workers.dev');
+  const [forceCloud, setForceCloud] = React.useState(localStorage.getItem('auto_manager_force_cloud') !== 'false');
   const [isTesting, setIsTesting] = React.useState(false);
   const [testResult, setTestResult] = React.useState<'success' | 'success_forced' | 'failed_local' | 'error' | null>(null);
 
@@ -53,7 +53,7 @@ export default function Layout() {
       if (forceCloud) {
         localStorage.setItem('auto_manager_force_cloud', 'true');
       } else {
-        localStorage.removeItem('auto_manager_force_cloud');
+        localStorage.setItem('auto_manager_force_cloud', 'false');
       }
 
       // Re-trigger health check probe with forceRefresh=true
