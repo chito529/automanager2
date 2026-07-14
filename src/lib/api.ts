@@ -160,10 +160,41 @@ export function ensureFallbackChecked(forceRefresh = false): Promise<boolean> {
   return checkPromise;
 }
 
+// Helper to handle and format detailed API response errors
+async function handleResponseError(response: Response, defaultMessage: string): Promise<never> {
+  let detail = '';
+  try {
+    const text = await response.text();
+    try {
+      const parsed = JSON.parse(text);
+      detail = parsed.error || parsed.message || text;
+    } catch {
+      detail = text;
+    }
+  } catch {}
+  
+  const statusStr = response.status ? `(Status: ${response.status})` : '';
+  const errorMsg = detail ? `${defaultMessage}: ${detail} ${statusStr}` : `${defaultMessage} ${statusStr}`;
+  throw new Error(errorMsg);
+}
+
 // Helper to get auth headers
 async function getHeaders() {
   const user = auth.currentUser;
-  const token = user ? btoa(unescape(encodeURIComponent(JSON.stringify(user)))) : '';
+  let token = '';
+  if (user) {
+    try {
+      // Modern standard way to encode UTF-8 JSON to Base64 safely in any browser/client
+      const jsonStr = JSON.stringify(user);
+      const utf8Bytes = encodeURIComponent(jsonStr).replace(/%([0-9A-F]{2})/g, (_, p1) => {
+        return String.fromCharCode(parseInt(p1, 16));
+      });
+      token = btoa(utf8Bytes);
+    } catch (err) {
+      console.warn('[API] Standard Base64 encoding failed, falling back to unescape:', err);
+      token = btoa(unescape(encodeURIComponent(JSON.stringify(user))));
+    }
+  }
   return {
     'Content-Type': 'application/json',
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -183,7 +214,7 @@ export const api = {
       const response = await fetch(getApiUrl('/api/vehicles'), {
         headers: await getHeaders(),
       });
-      if (!response.ok) throw new Error('Failed to fetch vehicles');
+      if (!response.ok) await handleResponseError(response, 'Failed to fetch vehicles');
       return response.json();
     },
     create: async (data: Omit<Vehicle, 'id'>): Promise<string> => {
@@ -200,7 +231,7 @@ export const api = {
         headers: await getHeaders(),
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to create vehicle');
+      if (!response.ok) await handleResponseError(response, 'Failed to create vehicle');
       const result = await response.json();
       return result.id;
     },
@@ -219,7 +250,7 @@ export const api = {
         headers: await getHeaders(),
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to update vehicle');
+      if (!response.ok) await handleResponseError(response, 'Failed to update vehicle');
     },
     delete: async (id: string): Promise<void> => {
       if (await ensureFallbackChecked()) {
@@ -232,7 +263,7 @@ export const api = {
         method: 'DELETE',
         headers: await getHeaders(),
       });
-      if (!response.ok) throw new Error('Failed to delete vehicle');
+      if (!response.ok) await handleResponseError(response, 'Failed to delete vehicle');
     }
   },
 
@@ -244,7 +275,7 @@ export const api = {
       const response = await fetch(getApiUrl('/api/customers'), {
         headers: await getHeaders(),
       });
-      if (!response.ok) throw new Error('Failed to fetch customers');
+      if (!response.ok) await handleResponseError(response, 'Failed to fetch customers');
       return response.json();
     },
     create: async (data: Omit<Customer, 'id'>): Promise<string> => {
@@ -261,7 +292,7 @@ export const api = {
         headers: await getHeaders(),
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to create customer');
+      if (!response.ok) await handleResponseError(response, 'Failed to create customer');
       const result = await response.json();
       return result.id;
     },
@@ -280,7 +311,7 @@ export const api = {
         headers: await getHeaders(),
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to update customer');
+      if (!response.ok) await handleResponseError(response, 'Failed to update customer');
     },
     delete: async (id: string): Promise<void> => {
       if (await ensureFallbackChecked()) {
@@ -293,7 +324,7 @@ export const api = {
         method: 'DELETE',
         headers: await getHeaders(),
       });
-      if (!response.ok) throw new Error('Failed to delete customer');
+      if (!response.ok) await handleResponseError(response, 'Failed to delete customer');
     }
   },
 
@@ -305,7 +336,7 @@ export const api = {
       const response = await fetch(getApiUrl('/api/sales'), {
         headers: await getHeaders(),
       });
-      if (!response.ok) throw new Error('Failed to fetch sales');
+      if (!response.ok) await handleResponseError(response, 'Failed to fetch sales');
       return response.json();
     },
     create: async (data: Omit<Sale, 'id'>): Promise<string> => {
@@ -322,7 +353,7 @@ export const api = {
         headers: await getHeaders(),
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to create sale');
+      if (!response.ok) await handleResponseError(response, 'Failed to create sale');
       const result = await response.json();
       return result.id;
     },
@@ -337,7 +368,7 @@ export const api = {
         method: 'DELETE',
         headers: await getHeaders(),
       });
-      if (!response.ok) throw new Error('Failed to delete sale');
+      if (!response.ok) await handleResponseError(response, 'Failed to delete sale');
     }
   },
 
@@ -349,7 +380,7 @@ export const api = {
       const response = await fetch(getApiUrl('/api/expenses'), {
         headers: await getHeaders(),
       });
-      if (!response.ok) throw new Error('Failed to fetch expenses');
+      if (!response.ok) await handleResponseError(response, 'Failed to fetch expenses');
       return response.json();
     },
     create: async (data: Omit<Expense, 'id'>): Promise<string> => {
@@ -366,7 +397,7 @@ export const api = {
         headers: await getHeaders(),
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to create expense');
+      if (!response.ok) await handleResponseError(response, 'Failed to create expense');
       const result = await response.json();
       return result.id;
     },
@@ -381,7 +412,7 @@ export const api = {
         method: 'DELETE',
         headers: await getHeaders(),
       });
-      if (!response.ok) throw new Error('Failed to delete expense');
+      if (!response.ok) await handleResponseError(response, 'Failed to delete expense');
     }
   },
 
@@ -394,7 +425,7 @@ export const api = {
       const response = await fetch(getApiUrl('/api/transactions'), {
         headers: await getHeaders(),
       });
-      if (!response.ok) throw new Error('Failed to fetch transactions');
+      if (!response.ok) await handleResponseError(response, 'Failed to fetch transactions');
       return response.json();
     },
     create: async (data: Omit<Transaction, 'id'>): Promise<string> => {
@@ -411,7 +442,7 @@ export const api = {
         headers: await getHeaders(),
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to create transaction');
+      if (!response.ok) await handleResponseError(response, 'Failed to create transaction');
       const result = await response.json();
       return result.id;
     },
@@ -426,7 +457,7 @@ export const api = {
         method: 'DELETE',
         headers: await getHeaders(),
       });
-      if (!response.ok) throw new Error('Failed to delete transaction');
+      if (!response.ok) await handleResponseError(response, 'Failed to delete transaction');
     }
   },
 
@@ -438,7 +469,7 @@ export const api = {
       const response = await fetch(getApiUrl('/api/accounts'), {
         headers: await getHeaders(),
       });
-      if (!response.ok) throw new Error('Failed to fetch accounts');
+      if (!response.ok) await handleResponseError(response, 'Failed to fetch accounts');
       return response.json();
     },
     create: async (data: Omit<Account, 'id'>): Promise<string> => {
@@ -455,7 +486,7 @@ export const api = {
         headers: await getHeaders(),
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to create account');
+      if (!response.ok) await handleResponseError(response, 'Failed to create account');
       const result = await response.json();
       return result.id;
     },
@@ -474,7 +505,7 @@ export const api = {
         headers: await getHeaders(),
         body: JSON.stringify({ status }),
       });
-      if (!response.ok) throw new Error('Failed to update account status');
+      if (!response.ok) await handleResponseError(response, 'Failed to update account status');
     },
     delete: async (id: string): Promise<void> => {
       if (await ensureFallbackChecked()) {
@@ -487,7 +518,7 @@ export const api = {
         method: 'DELETE',
         headers: await getHeaders(),
       });
-      if (!response.ok) throw new Error('Failed to delete account');
+      if (!response.ok) await handleResponseError(response, 'Failed to delete account');
     }
   }
 };

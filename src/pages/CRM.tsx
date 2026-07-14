@@ -81,9 +81,9 @@ export default function CRM() {
       await api.customers.create(payload);
       setIsModalOpen(false);
       await loadCustomers();
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error saving customer:', e);
-      alert('Error al guardar el cliente');
+      alert('Error al guardar el cliente: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setLoading(false);
     }

@@ -141,9 +141,9 @@ export default function Vehicles() {
       }
       setIsModalOpen(false);
       await loadVehicles();
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error saving vehicle:', e);
-      alert('Error al guardar el vehículo');
+      alert('Error al guardar el vehículo: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setLoading(false);
     }

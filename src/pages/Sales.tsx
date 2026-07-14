@@ -115,9 +115,9 @@ export default function Sales() {
 
       setIsModalOpen(false);
       await loadData();
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error recording sale:', e);
-      alert('Error al registrar la venta');
+      alert('Error al registrar la venta: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setLoading(false);
     }

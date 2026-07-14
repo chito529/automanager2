@@ -193,6 +193,20 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Enable CORS natively to allow cross-origin requests (e.g. from app.almiron.com.py)
+  app.use((req, res, next) => {
+    const origin = req.headers.origin || '*';
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   // API Health Endpoint
   app.get("/api/health", (req, res) => {
     res.set({
