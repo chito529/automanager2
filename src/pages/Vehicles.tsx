@@ -143,11 +143,26 @@ export default function Vehicles() {
     try {
       setSubmitting(true);
       setSubmitError(null);
+      
       if (editingVehicle) {
         await api.vehicles.update(editingVehicle.id, payload);
+        // Update state locally immediately
+        const updatedVehicle: Vehicle = {
+          id: editingVehicle.id,
+          ...payload
+        };
+        setVehicles(prev => prev.map(v => v.id.toString() === editingVehicle.id.toString() ? updatedVehicle : v));
       } else {
-        await api.vehicles.create(payload);
+        const newId = await api.vehicles.create(payload);
+        // Update state locally immediately with the returned or generated ID
+        const newVehicle: Vehicle = {
+          id: newId || (Date.now() + Math.floor(Math.random() * 1000)).toString(),
+          ...payload
+        };
+        setVehicles(prev => [...prev, newVehicle]);
       }
+      
+      // Close the modal and load the absolute source of truth from the server
       setIsModalOpen(false);
       await loadVehicles();
     } catch (err: any) {

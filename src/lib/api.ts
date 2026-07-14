@@ -277,26 +277,49 @@ async function getEntityList(entity: string): Promise<any[]> {
     const loadPath = `/api/load?key=${entity}`;
     const response = await executeWorkerCall(loadPath, { method: 'GET' });
     const result = await response.json();
-    if (result.success && result.data && result.data.item_value) {
-      try {
-        const parsedVal = typeof result.data.item_value === 'string'
-          ? JSON.parse(result.data.item_value)
-          : result.data.item_value;
-        return Array.isArray(parsedVal) ? parsedVal : (parsedVal ? [parsedVal] : []);
-      } catch (err) {
-        console.warn(`Error parsing item_value for "${entity}":`, err);
-        return [];
+    if (result.success && result.data && result.data.item_value !== undefined && result.data.item_value !== null) {
+      let currentVal = result.data.item_value;
+      
+      // Keep parsing while it is a string that looks like serialized JSON to fully unpack nesting
+      for (let i = 0; i < 5; i++) {
+        if (typeof currentVal === 'string') {
+          const trimmed = currentVal.trim();
+          if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || 
+              (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+              (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+            try {
+              currentVal = JSON.parse(currentVal);
+            } catch (err) {
+              console.warn(`[API] Failed to parse string during unpacking iteration ${i}:`, err);
+              break;
+            }
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+
+      if (Array.isArray(currentVal)) {
+        // Filter out any non-object/null values from the retrieved array
+        return currentVal.filter((item: any) => item && typeof item === 'object');
+      } else if (currentVal && typeof currentVal === 'object') {
+        return [currentVal];
       }
     }
     return [];
   } catch (err: any) {
     console.error(`Error loading entity list for ${entity}:`, err);
-    throw err;
+    return [];
   }
 }
 
 async function createEntityItem(entity: string, itemData: any): Promise<any> {
-  const list = await getEntityList(entity);
+  const rawList = await getEntityList(entity);
+  // Ensure we work with a clean list of objects with valid IDs
+  const list = rawList.filter((item: any) => item && typeof item === 'object');
+  
   const id = itemData.id || (Date.now() + Math.floor(Math.random() * 1000)).toString();
   const newItem = { ...itemData, id };
   list.push(newItem);
@@ -317,7 +340,9 @@ async function createEntityItem(entity: string, itemData: any): Promise<any> {
 }
 
 async function updateEntityItem(entity: string, id: string, updates: any, isStatusOnly = false): Promise<any> {
-  const list = await getEntityList(entity);
+  const rawList = await getEntityList(entity);
+  const list = rawList.filter((item: any) => item && typeof item === 'object');
+  
   const index = list.findIndex((item: any) => item && item.id && item.id.toString() === id.toString());
   if (index === -1) {
     throw new Error(`Item con ID ${id} no encontrado en ${entity}`);
@@ -344,7 +369,8 @@ async function updateEntityItem(entity: string, id: string, updates: any, isStat
 }
 
 async function deleteEntityItem(entity: string, id: string): Promise<any> {
-  const list = await getEntityList(entity);
+  const rawList = await getEntityList(entity);
+  const list = rawList.filter((item: any) => item && typeof item === 'object');
   const updatedList = list.filter((item: any) => item && item.id && item.id.toString() !== id.toString());
 
   const savePath = `/api/save`;
