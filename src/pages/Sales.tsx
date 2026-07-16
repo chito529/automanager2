@@ -28,6 +28,10 @@ export default function Sales() {
 
   useEffect(() => {
     loadData();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('add') === 'true') {
+      openAddModal();
+    }
   }, []);
 
   const loadData = async () => {
@@ -186,7 +190,8 @@ export default function Sales() {
         </div>
       </div>
 
-      <div className="mt-8 overflow-hidden shadow-sm ring-1 ring-slate-800 sm:rounded-xl bg-slate-900/50">
+      {/* Vista de Escritorio */}
+      <div className="mt-8 overflow-hidden shadow-sm ring-1 ring-slate-800 sm:rounded-xl bg-slate-900/50 hidden sm:block">
         <table className="min-w-full divide-y divide-slate-800">
           <thead className="bg-slate-950/50">
             <tr>
@@ -246,6 +251,55 @@ export default function Sales() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Vista de Móvil */}
+      <div className="mt-6 space-y-4 block sm:hidden">
+        {loading && sales.length === 0 ? (
+          <div className="text-center py-12 text-sm text-slate-500 bg-slate-900/30 rounded-xl border border-slate-900">Cargando ventas...</div>
+        ) : sales.length === 0 ? (
+          <div className="text-center py-12 text-sm text-slate-500 bg-slate-900/30 rounded-xl border border-slate-900">No hay ventas registradas.</div>
+        ) : (
+          sales.map(s => (
+            <div key={s.id} className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 space-y-3 shadow-md animate-in fade-in duration-200">
+              <div className="flex items-start justify-between gap-2 border-b border-slate-800/40 pb-2.5">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">{formatDate(s.date)}</h3>
+                  <p className="text-sm font-semibold text-slate-100 mt-1">{getVehicleLabel(s.vehicleId)}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Cliente: {getCustomerLabel(s.customerId)}</p>
+                </div>
+                <button
+                  onClick={() => handleDelete(s.id, s.vehicleId)}
+                  className="text-slate-400 hover:text-rose-400 p-1.5 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                  title="Eliminar Venta"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-[11px]">
+                <div>
+                  <span className="block text-slate-500 font-medium uppercase tracking-wider text-[9px] mb-0.5">Monto Venta</span>
+                  <span className="text-slate-200 font-bold font-mono">{formatCurrency(s.salePrice)}</span>
+                </div>
+                <div>
+                  <span className="block text-slate-500 font-medium uppercase tracking-wider text-[9px] mb-0.5">Utilidad Neta</span>
+                  <span className="text-emerald-400 font-bold font-mono">{formatCurrency(s.netProfit)}</span>
+                </div>
+                <div>
+                  <span className="block text-slate-500 font-medium uppercase tracking-wider text-[9px] mb-0.5">Saldo</span>
+                  <div className="mt-0.5">
+                    {s.pendingBalance > 0 ? (
+                      <span className="text-red-400 font-semibold font-mono">{formatCurrency(s.pendingBalance)}</span>
+                    ) : (
+                      <span className="text-emerald-400 font-semibold">Saldado</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* Modern Dialog/Modal for Registrar Venta */}

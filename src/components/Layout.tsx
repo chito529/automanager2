@@ -3,7 +3,8 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, CarFront, FileText, Users, ShoppingCart, 
   ArrowLeftRight, Wallet, Receipt, Bell, BarChart3, LogOut,
-  Database, RefreshCw, CheckCircle2, XCircle, AlertCircle, ExternalLink, Lock
+  Database, RefreshCw, CheckCircle2, XCircle, AlertCircle, ExternalLink, Lock,
+  Menu
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -28,6 +29,7 @@ export default function Layout() {
   const { currency, setCurrency } = useSettings();
   const user = auth.currentUser;
   const [isLocal, setIsLocal] = React.useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   
   // Connection Modal Settings
   const [isConnModalOpen, setIsConnModalOpen] = React.useState(false);
@@ -141,10 +143,19 @@ export default function Layout() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 bg-slate-950 overflow-hidden">
-        <header className="h-16 bg-slate-950 border-b border-slate-900 flex items-center justify-between px-8 shrink-0">
-          <h1 className="text-lg font-semibold text-slate-200">
-            {navigation.find(n => n.href === location.pathname)?.name || 'AutoManager'}
-          </h1>
+        <header className="h-16 bg-slate-950 border-b border-slate-900 flex items-center justify-between px-4 md:px-8 shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="md:hidden p-1.5 text-slate-400 hover:text-white hover:bg-slate-900 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-800"
+              aria-label="Abrir menú"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            <h1 className="text-lg font-semibold text-slate-200">
+              {navigation.find(n => n.href === location.pathname)?.name || 'AutoManager'}
+            </h1>
+          </div>
           <div className="flex gap-3 items-center">
             <button 
               onClick={() => setIsConnModalOpen(true)}
@@ -171,9 +182,6 @@ export default function Layout() {
             <span className="text-[11px] bg-indigo-900/40 text-indigo-300 px-3 py-1 border border-indigo-800/60 rounded-full font-semibold">
               USD ($)
             </span>
-            <div className="flex gap-4 md:hidden items-center">
-              <CarFront className="h-6 w-6 text-indigo-500" />
-            </div>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto bg-slate-950 p-4 md:p-8 custom-scrollbar">
@@ -182,6 +190,67 @@ export default function Layout() {
           </div>
         </main>
       </div>
+
+      {/* Mobile Drawer Overlay */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden" role="dialog" aria-modal="true">
+          <div 
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsMobileMenuOpen(false)}
+          ></div>
+
+          <div className="relative flex w-full max-w-xs flex-1 flex-col bg-slate-900 border-r border-slate-800 pt-5 pb-4 focus:outline-none animate-in slide-in-from-left duration-200">
+            <div className="absolute top-3 right-3">
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 focus:outline-none"
+              >
+                <XCircle className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="flex flex-shrink-0 items-center px-6 mb-6">
+              <div className="text-indigo-500 font-bold text-xl flex items-center gap-2">
+                <CarFront className="h-8 w-8 text-indigo-500" />
+                AutoManager
+              </div>
+            </div>
+
+            <nav className="flex-1 overflow-y-auto px-4 space-y-1 text-sm font-medium custom-scrollbar">
+              {navigation.map((item) => {
+                const isActive = location.pathname === item.href;
+                return (
+                  <NavLink
+                    key={item.name}
+                    to={item.href}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={cn(
+                      isActive ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white',
+                      'group flex items-center px-3 py-2.5 rounded-lg transition-colors gap-3 relative'
+                    )}
+                  >
+                    {isActive && <span className="absolute left-0 w-1 h-5 bg-indigo-500 rounded-full"></span>}
+                    <item.icon
+                      className={cn(
+                        isActive ? 'text-indigo-500' : 'text-slate-400 group-hover:text-slate-300',
+                        'h-5 w-5 flex-shrink-0'
+                      )}
+                      aria-hidden="true"
+                    />
+                    {item.name}
+                  </NavLink>
+                );
+              })}
+            </nav>
+
+            <div className="p-4 border-t border-slate-800/50 mt-auto text-center">
+              <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-widest bg-slate-950 px-2 py-1.5 rounded-full border border-slate-800/60 inline-block w-full">
+                Acceso Público
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Database Connection Settings Modal */}
       {isConnModalOpen && (

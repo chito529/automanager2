@@ -36,6 +36,10 @@ export default function CRM() {
 
   useEffect(() => {
     loadCustomers();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('add') === 'true') {
+      openAddModal();
+    }
   }, []);
 
   const loadCustomers = async () => {

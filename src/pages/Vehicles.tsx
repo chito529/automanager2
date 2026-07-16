@@ -41,6 +41,10 @@ export default function Vehicles() {
 
   useEffect(() => {
     loadVehicles();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('add') === 'true') {
+      openAddModal();
+    }
   }, []);
 
   const loadVehicles = async () => {
@@ -194,7 +198,8 @@ export default function Vehicles() {
         </div>
       </div>
 
-      <div className="mt-8 flow-root">
+      {/* Vista de escritorio (Tableta en adelante) */}
+      <div className="mt-8 flow-root hidden sm:block">
         <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
           <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
             <div className="overflow-hidden shadow-sm ring-1 ring-slate-800 sm:rounded-xl bg-slate-900/50">
@@ -257,6 +262,64 @@ export default function Vehicles() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Vista de Móvil (Tarjetas táctiles compactas) */}
+      <div className="mt-6 space-y-4 block sm:hidden">
+        {loading && vehicles.length === 0 ? (
+          <div className="text-center py-12 text-sm text-slate-500 bg-slate-900/30 rounded-xl border border-slate-900">Cargando vehículos...</div>
+        ) : vehicles.length === 0 ? (
+          <div className="text-center py-12 text-sm text-slate-500 bg-slate-900/30 rounded-xl border border-slate-900">No hay vehículos registrados.</div>
+        ) : (
+          vehicles.map((v) => (
+            <div key={v.id} className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 space-y-3 shadow-md animate-in fade-in duration-200">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-100">{v.brand} {v.model}</h3>
+                  <p className="text-[10px] text-slate-500 font-mono mt-0.5">VIN: {v.vin || 'N/D'}</p>
+                </div>
+                <span className={`inline-flex items-center shrink-0 rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${getStatusColor(v.status)}`}>
+                  {v.status}
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2 py-2.5 border-y border-slate-800/40 text-[11px]">
+                <div>
+                  <span className="block text-slate-500 font-medium uppercase tracking-wider text-[9px] mb-0.5">Año</span>
+                  <span className="text-slate-300 font-bold">{v.year}</span>
+                </div>
+                <div>
+                  <span className="block text-slate-500 font-medium uppercase tracking-wider text-[9px] mb-0.5">Costo Compra</span>
+                  <span className="text-slate-300 font-bold font-mono">{formatCurrency(v.purchasePrice)}</span>
+                </div>
+                <div>
+                  <span className="block text-slate-500 font-medium uppercase tracking-wider text-[9px] mb-0.5">Precio Venta</span>
+                  <span className="text-indigo-400 font-bold font-mono">{formatCurrency(v.publicationPrice)}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[9px] text-slate-500 font-mono">ID: {v.id.toString().substring(0, 8)}</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openEditModal(v)}
+                    className="flex items-center gap-1 text-xs text-slate-300 hover:text-indigo-400 bg-slate-800/60 hover:bg-slate-850 px-2.5 py-1.5 rounded-lg border border-slate-700/35 cursor-pointer select-none active:scale-95 transition-all"
+                  >
+                    <Edit2 className="h-3.5 w-3.5" />
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => handleDelete(v.id)}
+                    className="flex items-center gap-1 text-xs text-slate-300 hover:text-rose-400 bg-rose-950/15 border border-rose-900/35 px-2.5 py-1.5 rounded-lg cursor-pointer select-none active:scale-95 transition-all"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Borrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* Modern Dialog/Modal for Add/Edit */}

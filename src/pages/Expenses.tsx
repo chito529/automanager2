@@ -40,6 +40,10 @@ export default function Expenses() {
 
   useEffect(() => {
     loadData();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('add') === 'true') {
+      openAddModal();
+    }
   }, []);
 
   const loadData = async () => {
