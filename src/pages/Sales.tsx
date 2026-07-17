@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { Sale, Vehicle, Customer } from '@/types';
+import { Sale, Vehicle, Customer, VehicleStatus } from '@/types';
 import { Plus, Check, Clock, X, Info, Trash2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -14,6 +14,10 @@ export default function Sales() {
   const { formatCurrency } = useSettings();
   const { confirm } = useConfirmation();
 
+  // Search & Filter state
+  const [searchTerm, setSearchTerm] = useState('');
+  const [tradeInFilter, setTradeInFilter] = useState<'Todos' | 'ConParteDePago' | 'SinParteDePago'>('Todos');
+
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -25,6 +29,17 @@ export default function Sales() {
   const [paymentMethod, setPaymentMethod] = useState('Transferencia Bancaria');
   const [commission, setCommission] = useState<number>(0);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Trade-In Form State
+  const [hasTradeIn, setHasTradeIn] = useState(false);
+  const [tradeInBrand, setTradeInBrand] = useState('');
+  const [tradeInModel, setTradeInModel] = useState('');
+  const [tradeInYear, setTradeInYear] = useState<number>(new Date().getFullYear());
+  const [tradeInVin, setTradeInVin] = useState('');
+  const [tradeInValuation, setTradeInValuation] = useState<number>(0);
+  const [tradeInEstimatedCosts, setTradeInEstimatedCosts] = useState<number>(0);
+  const [tradeInDocumentation, setTradeInDocumentation] = useState('Título, Cédula Verde, Contrato de Compraventa');
+  const [tradeInStatus, setTradeInStatus] = useState<VehicleStatus>('Comprado');
 
   useEffect(() => {
     loadData();
@@ -61,6 +76,18 @@ export default function Sales() {
     setPaymentMethod('Transferencia Bancaria');
     setCommission(0);
     setDate(new Date().toISOString().split('T')[0]);
+    
+    // Trade-In resets
+    setHasTradeIn(false);
+    setTradeInBrand('');
+    setTradeInModel('');
+    setTradeInYear(new Date().getFullYear());
+    setTradeInVin('');
+    setTradeInValuation(0);
+    setTradeInEstimatedCosts(0);
+    setTradeInDocumentation('Título, Cédula Verde, Contrato de Compraventa');
+    setTradeInStatus('Comprado');
+    
     setIsModalOpen(true);
   };
 
@@ -75,10 +102,10 @@ export default function Sales() {
     }
   }, [selectedVehicleId]);
 
-  // Projected Profit Calculation
+  // Projected Profit and Pending Balance Calculation
   const purchasePrice = selectedVehicle ? selectedVehicle.purchasePrice : 0;
   const projectedProfit = selectedVehicle ? (salePrice - purchasePrice - commission) : 0;
-  const pendingBalance = salePrice - downPayment;
+  const pendingBalance = Math.max(0, salePrice - downPayment - (hasTradeIn ? tradeInValuation : 0));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,23 +122,71 @@ export default function Sales() {
       return;
     }
 
-    const payload = {
-      date,
-      vehicleId: selectedVehicleId,
-      customerId: selectedCustomerId,
-      salePrice: Number(salePrice),
-      downPayment: Number(downPayment),
-      pendingBalance: Number(pendingBalance),
-      paymentMethod,
-      commission: Number(commission),
-      netProfit: Number(projectedProfit)
-    };
+    if (hasTradeIn) {
+      if (!tradeInBrand || !tradeInModel || !tradeInValuation) {
+        alert('Por favor, complete los campos obligatorios del vehículo en parte de pago (Marca, Modelo, Valuación).');
+        return;
+      }
+    }
 
     try {
       setLoading(true);
-      await api.sales.create(payload);
+
+      // 1. If has trade-in, create the vehicle first to get the generated ID
+      let tradeInVehicleId = '';
+      if (hasTradeIn) {
+        tradeInVehicleId = await api.vehicles.create({
+          brand: tradeInBrand,
+          model: tradeInModel,
+          year: Number(tradeInYear),
+          vin: tradeInVin,
+          status: tradeInStatus || 'Comprado',
+          purchasePrice: Number(tradeInValuation),
+          publicationPrice: Math.round(Number(tradeInValuation) * 1.2), // Suggest +20%
+          salePrice: 0,
+          purchaseDate: date,
+          supplier: `Parte de pago - Cliente: ${selectedCustomer?.name || 'Cliente'}`,
+          receivedFromCustomerId: selectedCustomerId,
+          documentation: tradeInDocumentation,
+          estimatedCosts: Number(tradeInEstimatedCosts) || 0,
+        });
+      }
+
+      // 2. Create the sale with the tradeInVehicleId if applicable
+      const payload = {
+        date,
+        vehicleId: selectedVehicleId,
+        customerId: selectedCustomerId,
+        salePrice: Number(salePrice),
+        downPayment: Number(downPayment),
+        pendingBalance: Number(pendingBalance),
+        paymentMethod,
+        commission: Number(commission),
+        netProfit: Number(projectedProfit),
+        hasTradeIn,
+        ...(hasTradeIn ? {
+          tradeInBrand,
+          tradeInModel,
+          tradeInYear: Number(tradeInYear),
+          tradeInVin,
+          tradeInValuation: Number(tradeInValuation),
+          tradeInEstimatedCosts: Number(tradeInEstimatedCosts) || 0,
+          tradeInDocumentation,
+          tradeInStatus,
+          tradeInVehicleId,
+        } : {})
+      };
+
+      const saleId = await api.sales.create(payload);
+
+      // 3. Link the trade-in vehicle back to the created sale ID
+      if (hasTradeIn && tradeInVehicleId) {
+        await api.vehicles.update(tradeInVehicleId, {
+          receivedAsTradeInForSaleId: saleId
+        });
+      }
       
-      // Also update the vehicle's status to 'Vendido' and set its salePrice
+      // 4. Update the sold vehicle's status to 'Vendido' and set its salePrice
       await api.vehicles.update(selectedVehicleId, {
         status: 'Vendido',
         salePrice: Number(salePrice)
@@ -127,10 +202,11 @@ export default function Sales() {
     }
   };
 
-  const handleDelete = async (saleId: string, vehicleId: string) => {
+  const handleDelete = async (saleId: string, vehicleId: string, tradeInVehicleId?: string) => {
     const confirmed = await confirm({
       title: 'Eliminar Venta',
-      message: '¿Está seguro de que desea eliminar esta venta? Esta acción restaurará el estado del vehículo a "Publicado".',
+      message: '¿Está seguro de que desea eliminar esta venta? Esta acción restaurará el estado del vehículo a "Publicado"' + 
+               (tradeInVehicleId ? ' y eliminará del inventario el vehículo recibido como parte de pago.' : '.'),
       confirmText: 'Eliminar',
       cancelText: 'Cancelar',
       type: 'danger'
@@ -141,10 +217,15 @@ export default function Sales() {
       setLoading(true);
       await api.sales.delete(saleId);
       
-      // Restore the vehicle's status to 'Publicado'
+      // Restore the sold vehicle's status to 'Publicado'
       await api.vehicles.update(vehicleId, {
         status: 'Publicado'
       });
+
+      // If there was a trade-in vehicle, delete it
+      if (tradeInVehicleId) {
+        await api.vehicles.delete(tradeInVehicleId);
+      }
 
       await loadData();
     } catch (e) {
@@ -169,6 +250,25 @@ export default function Sales() {
   // Only show vehicles that are not already sold (unless it's the current one)
   const availableVehicles = vehicles.filter(v => v.status !== 'Vendido');
 
+  // Filtered sales calculation
+  const filteredSales = sales.filter(s => {
+    const vehicleLabel = getVehicleLabel(s.vehicleId).toLowerCase();
+    const customerLabel = getCustomerLabel(s.customerId).toLowerCase();
+    const tradeInBrandLabel = s.tradeInBrand ? s.tradeInBrand.toLowerCase() : '';
+    const tradeInModelLabel = s.tradeInModel ? s.tradeInModel.toLowerCase() : '';
+    
+    const matchesSearch = vehicleLabel.includes(searchTerm.toLowerCase()) || 
+                          customerLabel.includes(searchTerm.toLowerCase()) ||
+                          tradeInBrandLabel.includes(searchTerm.toLowerCase()) ||
+                          tradeInModelLabel.includes(searchTerm.toLowerCase());
+                          
+    const matchesTradeIn = tradeInFilter === 'Todos' ||
+                           (tradeInFilter === 'ConParteDePago' && s.hasTradeIn) ||
+                           (tradeInFilter === 'SinParteDePago' && !s.hasTradeIn);
+                           
+    return matchesSearch && matchesTradeIn;
+  });
+
   return (
     <div className="space-y-6">
       <div className="sm:flex sm:items-center justify-between">
@@ -190,8 +290,42 @@ export default function Sales() {
         </div>
       </div>
 
+      {/* Filtros de Búsqueda y Tipo de Operación */}
+      <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            placeholder="Buscar por vehículo, cliente, o marca recibida..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+          />
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 shrink-0">
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Parte de Pago:</span>
+          <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-850">
+            {(['Todos', 'ConParteDePago', 'SinParteDePago'] as const).map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                onClick={() => setTradeInFilter(filter)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                  tradeInFilter === filter
+                    ? 'bg-indigo-600 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                }`}
+              >
+                {filter === 'Todos' && 'Todos'}
+                {filter === 'ConParteDePago' && 'Con Parte de Pago'}
+                {filter === 'SinParteDePago' && 'Sin Parte de Pago'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Vista de Escritorio */}
-      <div className="mt-8 overflow-hidden shadow-sm ring-1 ring-slate-800 sm:rounded-xl bg-slate-900/50 hidden sm:block">
+      <div className="overflow-hidden shadow-sm ring-1 ring-slate-800 sm:rounded-xl bg-slate-900/50 hidden sm:block">
         <table className="min-w-full divide-y divide-slate-800">
           <thead className="bg-slate-950/50">
             <tr>
@@ -206,21 +340,27 @@ export default function Sales() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800 bg-transparent">
-            {loading && sales.length === 0 ? (
+            {loading && filteredSales.length === 0 ? (
               <tr>
                 <td colSpan={6} className="py-8 text-center text-sm text-slate-500">Cargando...</td>
               </tr>
-            ) : sales.length === 0 ? (
+            ) : filteredSales.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-sm text-slate-500">No hay ventas registradas.</td>
+                <td colSpan={6} className="py-8 text-center text-sm text-slate-500">No se encontraron ventas registradas.</td>
               </tr>
             ) : (
-              sales.map(s => (
+              filteredSales.map(s => (
                 <tr key={s.id} className="hover:bg-slate-800/50 transition-colors">
                   <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm text-slate-200 sm:pl-6 font-mono">{formatDate(s.date)}</td>
                   <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-400">
                     <div className="font-medium text-slate-300">{getVehicleLabel(s.vehicleId)}</div>
                     <div className="text-xs text-slate-500 mt-0.5">Cliente: {getCustomerLabel(s.customerId)}</div>
+                    {s.hasTradeIn && (
+                      <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-indigo-950/40 border border-indigo-900/30 text-[11px] text-indigo-400 font-semibold">
+                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-400"></span>
+                        Recibido: {s.tradeInBrand} {s.tradeInModel} ({s.tradeInYear}) • {formatCurrency(s.tradeInValuation || 0)}
+                      </div>
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-200 font-semibold text-right font-mono">{formatCurrency(s.salePrice)}</td>
                   <td className="whitespace-nowrap px-3 py-4 text-sm text-right font-mono">
@@ -239,8 +379,8 @@ export default function Sales() {
                   <td className="whitespace-nowrap px-3 py-4 text-sm text-emerald-400 font-bold text-right font-mono">{formatCurrency(s.netProfit)}</td>
                   <td className="whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                     <button
-                      onClick={() => handleDelete(s.id, s.vehicleId)}
-                      className="text-red-500 hover:text-red-400 cursor-pointer bg-transparent border-0"
+                      onClick={() => handleDelete(s.id, s.vehicleId, s.tradeInVehicleId)}
+                      className="text-slate-500 hover:text-red-500 cursor-pointer bg-transparent border-0 p-1"
                       title="Eliminar Venta"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -254,23 +394,29 @@ export default function Sales() {
       </div>
 
       {/* Vista de Móvil */}
-      <div className="mt-6 space-y-4 block sm:hidden">
-        {loading && sales.length === 0 ? (
+      <div className="space-y-4 block sm:hidden">
+        {loading && filteredSales.length === 0 ? (
           <div className="text-center py-12 text-sm text-slate-500 bg-slate-900/30 rounded-xl border border-slate-900">Cargando ventas...</div>
-        ) : sales.length === 0 ? (
-          <div className="text-center py-12 text-sm text-slate-500 bg-slate-900/30 rounded-xl border border-slate-900">No hay ventas registradas.</div>
+        ) : filteredSales.length === 0 ? (
+          <div className="text-center py-12 text-sm text-slate-500 bg-slate-900/30 rounded-xl border border-slate-900">No se encontraron ventas.</div>
         ) : (
-          sales.map(s => (
+          filteredSales.map(s => (
             <div key={s.id} className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 space-y-3 shadow-md animate-in fade-in duration-200">
               <div className="flex items-start justify-between gap-2 border-b border-slate-800/40 pb-2.5">
                 <div>
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">{formatDate(s.date)}</h3>
                   <p className="text-sm font-semibold text-slate-100 mt-1">{getVehicleLabel(s.vehicleId)}</p>
                   <p className="text-xs text-slate-500 mt-0.5">Cliente: {getCustomerLabel(s.customerId)}</p>
+                  {s.hasTradeIn && (
+                    <div className="mt-2 p-2 bg-indigo-950/20 border border-indigo-900/30 rounded-lg text-xs text-slate-300">
+                      <span className="block text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-0.5">Parte de Pago</span>
+                      {s.tradeInBrand} {s.tradeInModel} ({s.tradeInYear}) • <span className="font-semibold text-indigo-300">{formatCurrency(s.tradeInValuation || 0)}</span>
+                    </div>
+                  )}
                 </div>
                 <button
-                  onClick={() => handleDelete(s.id, s.vehicleId)}
-                  className="text-slate-400 hover:text-rose-400 p-1.5 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                  onClick={() => handleDelete(s.id, s.vehicleId, s.tradeInVehicleId)}
+                  className="text-slate-400 hover:text-rose-400 p-1.5 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer animate-in duration-100"
                   title="Eliminar Venta"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -305,8 +451,8 @@ export default function Sales() {
       {/* Modern Dialog/Modal for Registrar Venta */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full shadow-2xl">
-            <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-xl w-full shadow-2xl max-h-[92vh] flex flex-col">
+            <div className="p-6 border-b border-slate-800 flex items-center justify-between shrink-0">
               <h2 className="text-lg font-bold text-slate-200">Registrar Venta</h2>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -316,7 +462,7 @@ export default function Sales() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto flex-1">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Seleccionar Vehículo *</label>
                 <select
@@ -384,7 +530,7 @@ export default function Sales() {
                   <input
                     type="number"
                     required
-                    value={salePrice}
+                    value={salePrice || ''}
                     onChange={(e) => setSalePrice(Number(e.target.value))}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
                   />
@@ -393,7 +539,7 @@ export default function Sales() {
                   <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Entrega Inicial (USD)</label>
                   <input
                     type="number"
-                    value={downPayment}
+                    value={downPayment || ''}
                     onChange={(e) => setDownPayment(Number(e.target.value))}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
                   />
@@ -404,27 +550,163 @@ export default function Sales() {
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Comisión de Venta / Broker (USD)</label>
                 <input
                   type="number"
-                  value={commission}
+                  value={commission || ''}
                   onChange={(e) => setCommission(Number(e.target.value))}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
                   placeholder="0"
                 />
               </div>
 
+              {/* Sección: Vehículo como Parte de Pago */}
+              <div className="border-t border-slate-800/60 pt-4">
+                <label className="flex items-center gap-3 cursor-pointer group select-none">
+                  <input
+                    type="checkbox"
+                    checked={hasTradeIn}
+                    onChange={(e) => setHasTradeIn(e.target.checked)}
+                    className="h-4.5 w-4.5 rounded border-slate-800 text-indigo-600 focus:ring-indigo-500 bg-slate-950 transition-all cursor-pointer"
+                  />
+                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider group-hover:text-indigo-400 transition-colors">
+                    ¿Recibe vehículo como parte de pago?
+                  </span>
+                </label>
+              </div>
+
+              {hasTradeIn && (
+                <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-850 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                  <div className="border-b border-slate-850 pb-1.5 flex items-center justify-between">
+                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Ficha del Vehículo Entrante</p>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-900/40">
+                      Nuevo en Inventario
+                    </span>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Marca *</label>
+                      <input
+                        type="text"
+                        required={hasTradeIn}
+                        placeholder="Ej. Toyota"
+                        value={tradeInBrand}
+                        onChange={(e) => setTradeInBrand(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Modelo *</label>
+                      <input
+                        type="text"
+                        required={hasTradeIn}
+                        placeholder="Ej. Corolla"
+                        value={tradeInModel}
+                        onChange={(e) => setTradeInModel(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Año *</label>
+                      <input
+                        type="number"
+                        required={hasTradeIn}
+                        min="1900"
+                        max={new Date().getFullYear() + 1}
+                        value={tradeInYear || ''}
+                        onChange={(e) => setTradeInYear(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Chasis / VIN</label>
+                      <input
+                        type="text"
+                        placeholder="Nro Chasis (opcional)"
+                        value={tradeInVin}
+                        onChange={(e) => setTradeInVin(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 transition-colors uppercase"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Valuación USD *</label>
+                      <input
+                        type="number"
+                        required={hasTradeIn}
+                        min="1"
+                        placeholder="0"
+                        value={tradeInValuation || ''}
+                        onChange={(e) => setTradeInValuation(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Costos Est. Reparación USD</label>
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={tradeInEstimatedCosts || ''}
+                        onChange={(e) => setTradeInEstimatedCosts(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Estado Inicial en Stock *</label>
+                      <select
+                        value={tradeInStatus}
+                        onChange={(e) => setTradeInStatus(e.target.value as VehicleStatus)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                      >
+                        <option value="Comprado">Comprado</option>
+                        <option value="En preparación">En preparación</option>
+                        <option value="Publicado">Publicado</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Documentación legal</label>
+                      <input
+                        type="text"
+                        value={tradeInDocumentation}
+                        onChange={(e) => setTradeInDocumentation(e.target.value)}
+                        placeholder="Título, Cédula Verde..."
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {selectedVehicle && (
-                <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-lg text-xs space-y-1">
+                <div className="p-3.5 bg-slate-950 border border-slate-800/85 rounded-lg text-xs space-y-1.5">
                   <div className="flex justify-between text-slate-400">
-                    <span>Precio de Adquisición (Costo):</span>
+                    <span>Precio de Adquisición (Costo vendido):</span>
                     <span className="font-mono">{formatCurrency(purchasePrice)}</span>
                   </div>
+                  {hasTradeIn && (
+                    <div className="flex justify-between text-slate-400">
+                      <span>Valuación de Entrega (Parte de Pago):</span>
+                      <span className="font-mono text-indigo-400">-{formatCurrency(tradeInValuation || 0)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-slate-400">
-                    <span>Saldo Pendiente del Cliente:</span>
-                    <span className="font-mono text-amber-400">{formatCurrency(pendingBalance)}</span>
+                    <span>Monto de Entrega Inicial:</span>
+                    <span className="font-mono text-slate-200">-{formatCurrency(downPayment || 0)}</span>
                   </div>
-                  <div className="flex justify-between border-t border-slate-800/60 pt-1.5 font-semibold">
+                  <div className="flex justify-between text-slate-400 border-t border-slate-850 pt-1.5">
+                    <span className="font-semibold text-amber-500">Saldo Pendiente del Cliente:</span>
+                    <span className="font-mono font-bold text-amber-500">{formatCurrency(pendingBalance)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-800/60 pt-2 font-semibold">
                     <span className="text-slate-300 flex items-center gap-1">
                       <Info className="h-3.5 w-3.5 text-indigo-400" />
-                      Margen Neto de Utilidad:
+                      Margen Neto de Utilidad de Venta:
                     </span>
                     <span className={`font-mono ${projectedProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                       {formatCurrency(projectedProfit)}
@@ -433,7 +715,7 @@ export default function Sales() {
                 </div>
               )}
 
-              <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
+              <div className="pt-4 border-t border-slate-800 flex justify-end gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}

@@ -14,6 +14,10 @@ export interface Vehicle {
   status: VehicleStatus;
   publicationPrice: number;
   salePrice: number;
+  receivedAsTradeInForSaleId?: string;
+  receivedFromCustomerId?: string;
+  documentation?: string;
+  estimatedCosts?: number;
 }
 
 export interface Expense {
@@ -61,6 +65,16 @@ export interface Sale {
   commission: number;
   netProfit: number;
   assignedTo?: string;
+  hasTradeIn?: boolean;
+  tradeInBrand?: string;
+  tradeInModel?: string;
+  tradeInYear?: number;
+  tradeInVin?: string;
+  tradeInValuation?: number;
+  tradeInEstimatedCosts?: number;
+  tradeInDocumentation?: string;
+  tradeInStatus?: VehicleStatus;
+  tradeInVehicleId?: string;
 }
 
 export interface Transaction {

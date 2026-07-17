@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { 
   CarFront, Users, DollarSign, Wallet, Receipt, ArrowRightLeft, 
-  TrendingUp, TrendingDown, Clock, AlertTriangle, Plus, ArrowUpRight, 
+  TrendingUp, TrendingDown, Clock, AlertTriangle, Plus, ArrowUpRight, Activity, 
   X, Calendar, Filter, Percent, FileSpreadsheet, Tag, ShieldCheck, Building,
   RefreshCw
 } from 'lucide-react';
@@ -352,6 +352,87 @@ export default function Dashboard() {
       .sort((a, b) => b.profit - a.profit)
       .slice(0, 5);
   }, [sales, vehicles, expenses]);
+
+  // Widgets: Top models and brands by utility
+  const topProfitModels = useMemo(() => {
+    const map = new Map<string, { brand: string; model: string; profit: number }>();
+    sales.forEach(s => {
+      const v = vehicles.find(veh => veh.id.toString() === s.vehicleId?.toString());
+      if (v) {
+        const vehicleExpenses = expenses.filter(e => e.vehicleId?.toString() === v.id.toString());
+        const totalExpenses = vehicleExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+        const profit = s.salePrice - v.purchasePrice - s.commission - totalExpenses;
+        
+        const key = `${v.brand} ${v.model}`;
+        const existing = map.get(key) || { brand: v.brand, model: v.model, profit: 0 };
+        existing.profit += profit;
+        map.set(key, existing);
+      }
+    });
+
+    return Array.from(map.values())
+      .sort((a, b) => b.profit - a.profit)
+      .slice(0, 5);
+  }, [sales, vehicles, expenses]);
+
+  // Widgets: Stock Aging Brackets
+  const stockAgingBrackets = useMemo(() => {
+    let tier1 = 0; // <30 dias
+    let tier2 = 0; // 30-60 dias
+    let tier3 = 0; // >60 dias
+    
+    vehicles
+      .filter(v => v.status !== 'Vendido')
+      .forEach(v => {
+        const days = Math.ceil((Date.now() - new Date(v.purchaseDate).getTime()) / (1000 * 60 * 60 * 24));
+        const daysInStock = isNaN(days) ? 0 : days;
+        if (daysInStock <= 30) tier1++;
+        else if (daysInStock <= 60) tier2++;
+        else tier3++;
+      });
+      
+    return { tier1, tier2, tier3 };
+  }, [vehicles]);
+
+  // Widgets: Cash Flow Metrics
+  const cashFlow = useMemo(() => {
+    const ledgerInflow = transactions
+      .filter(t => t.type === 'Ingreso')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const ledgerOutflow = transactions
+      .filter(t => t.type === 'Egreso')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    return {
+      inflow: ledgerInflow,
+      outflow: ledgerOutflow,
+      net: ledgerInflow - ledgerOutflow
+    };
+  }, [transactions]);
+
+  // Widgets: Recent Sales
+  const latestSales = useMemo(() => {
+    return [...sales]
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 5)
+      .map(s => {
+        const v = vehicles.find(veh => veh.id.toString() === s.vehicleId?.toString());
+        const c = customers.find(cust => cust.id.toString() === s.customerId?.toString());
+        return {
+          ...s,
+          vehicleLabel: v ? `${v.brand} ${v.model}` : 'Desconocido',
+          customerLabel: c ? c.name : 'Venta Directa'
+        };
+      });
+  }, [sales, vehicles, customers]);
+
+  // Widgets: Recent Transactions
+  const latestMovements = useMemo(() => {
+    return [...transactions]
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 5);
+  }, [transactions]);
 
   // Widgets: Alertas urgentes del negocio
   const criticalAlerts = useMemo(() => {
@@ -940,28 +1021,72 @@ export default function Dashboard() {
       {/* 6. Bento Grid of Widgets */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         
-        {/* Widget: Slow-moving un-sold stock */}
+        {/* Widget 1: Stock Envejecido (Aging brackets + list) */}
         <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-900 flex flex-col gap-3">
           <div className="flex items-center justify-between border-b border-slate-850 pb-2.5">
             <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
               <Clock className="h-4 w-4 text-indigo-400" />
-              Mayor Tiempo en Stock
+              Stock Envejecido
             </h3>
-            <span className="text-[10px] text-slate-500">{slowMovingStock.length} unidades</span>
+            <span className="text-[10px] text-slate-500">{vehicles.filter(v => v.status !== 'Vendido').length} un. en stock</span>
           </div>
-          <div className="flex flex-col gap-2.5 flex-1 justify-start">
+
+          {/* Aging Brackets Breakdown bar */}
+          <div className="space-y-2 bg-slate-950/40 p-3 rounded-xl border border-slate-850/50">
+            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Antigüedad en Showroom</p>
+            <div className="flex h-2.5 rounded-full overflow-hidden bg-slate-900">
+              {vehicles.filter(v => v.status !== 'Vendido').length > 0 ? (
+                <>
+                  <div 
+                    style={{ width: `${(stockAgingBrackets.tier1 / vehicles.filter(v => v.status !== 'Vendido').length) * 100}%` }} 
+                    className="bg-emerald-500 transition-all" 
+                    title="<30 días"
+                  />
+                  <div 
+                    style={{ width: `${(stockAgingBrackets.tier2 / vehicles.filter(v => v.status !== 'Vendido').length) * 100}%` }} 
+                    className="bg-amber-500 transition-all" 
+                    title="30-60 días"
+                  />
+                  <div 
+                    style={{ width: `${(stockAgingBrackets.tier3 / vehicles.filter(v => v.status !== 'Vendido').length) * 100}%` }} 
+                    className="bg-rose-500 transition-all" 
+                    title=">60 días"
+                  />
+                </>
+              ) : (
+                <div className="w-full bg-slate-800" />
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-1 text-[9px] text-center font-medium">
+              <div className="text-emerald-400 flex flex-col">
+                <span>0-30d</span>
+                <span className="font-bold">{stockAgingBrackets.tier1} un.</span>
+              </div>
+              <div className="text-amber-400 flex flex-col border-x border-slate-850">
+                <span>31-60d</span>
+                <span className="font-bold">{stockAgingBrackets.tier2} un.</span>
+              </div>
+              <div className="text-rose-400 flex flex-col">
+                <span>&gt;60d</span>
+                <span className="font-bold">{stockAgingBrackets.tier3} un.</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 flex-1 justify-start">
+            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Unidades Críticas en Stock</p>
             {slowMovingStock.length === 0 ? (
               <p className="text-xs text-slate-500 text-center py-6">No hay unidades en inventario.</p>
             ) : (
-              slowMovingStock.map(v => (
-                <div key={v.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-950/40 border border-slate-900">
+              slowMovingStock.slice(0, 3).map(v => (
+                <div key={v.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-950/40 border border-slate-900 hover:border-slate-800 transition-all">
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-slate-200 truncate">{v.brand} {v.model}</p>
-                    <p className="text-[10px] text-slate-500 truncate">Comprado: {v.purchaseDate}</p>
+                    <p className="text-[10px] text-slate-500 truncate">Ingreso: {v.purchaseDate}</p>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      v.daysInStock > 60 ? 'bg-red-500/10 text-red-400' : 'bg-slate-800 text-slate-300'
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
+                      v.daysInStock > 60 ? 'bg-rose-500/10 text-rose-400 border border-rose-950' : 'bg-slate-800 text-slate-300'
                     }`}>
                       {v.daysInStock} días
                     </span>
@@ -972,29 +1097,34 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Widget: Accounts Due and Overdue */}
+        {/* Widget 2: Accounts Due and Overdue */}
         <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-900 flex flex-col gap-3">
           <div className="flex items-center justify-between border-b border-slate-850 pb-2.5">
             <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
               <Receipt className="h-4 w-4 text-emerald-400" />
-              Vencimientos de Caja
+              Cuentas por Cobrar / Pagar
             </h3>
-            <span className="text-[10px] text-slate-500">Próximos días</span>
+            <span className="text-[10px] text-slate-500">Próximos compromisos</span>
           </div>
           
           <div className="space-y-3 flex-1">
             {/* Receivables */}
             <div>
-              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">A Cobrar (Clientes)</p>
+              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex justify-between">
+                <span>A Cobrar (Clientes)</span>
+                <span className="text-emerald-400 font-bold">
+                  {formatCurrency(accounts.filter(a => a.type === 'Cobrar' && a.status === 'Pendiente').reduce((s, a) => s + a.amount, 0))}
+                </span>
+              </p>
               <div className="space-y-1.5">
                 {upcomingAccounts.receivables.length === 0 ? (
                   <p className="text-[10px] text-slate-600 italic py-1">Sin cobros pendientes.</p>
                 ) : (
                   upcomingAccounts.receivables.map(a => (
-                    <div key={a.id} className="flex justify-between items-center text-xs p-1.5 bg-slate-950/30 rounded border border-slate-900/40">
-                      <span className="text-slate-300 truncate max-w-[130px]">{a.entity}</span>
+                    <div key={a.id} className="flex justify-between items-center text-xs p-1.5 bg-slate-950/30 rounded border border-slate-900/40 hover:border-slate-800 transition-all">
+                      <span className="text-slate-300 truncate max-w-[130px] font-medium">{a.entity}</span>
                       <div className="text-right shrink-0">
-                        <span className="font-bold text-emerald-400 text-[11px] block">{formatCurrency(a.amount)}</span>
+                        <span className="font-black text-emerald-400 text-[11px] block font-mono">{formatCurrency(a.amount)}</span>
                         <span className="text-[9px] text-slate-500">Vence: {a.dueDate}</span>
                       </div>
                     </div>
@@ -1005,16 +1135,21 @@ export default function Dashboard() {
 
             {/* Payables */}
             <div>
-              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">A Pagar (Proveedores)</p>
+              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex justify-between">
+                <span>A Pagar (Proveedores)</span>
+                <span className="text-rose-400 font-bold">
+                  {formatCurrency(accounts.filter(a => a.type === 'Pagar' && a.status === 'Pendiente').reduce((s, a) => s + a.amount, 0))}
+                </span>
+              </p>
               <div className="space-y-1.5">
                 {upcomingAccounts.payables.length === 0 ? (
                   <p className="text-[10px] text-slate-600 italic py-1">Sin compromisos de pago.</p>
                 ) : (
                   upcomingAccounts.payables.map(a => (
-                    <div key={a.id} className="flex justify-between items-center text-xs p-1.5 bg-slate-950/30 rounded border border-slate-900/40">
-                      <span className="text-slate-300 truncate max-w-[130px]">{a.entity}</span>
+                    <div key={a.id} className="flex justify-between items-center text-xs p-1.5 bg-slate-950/30 rounded border border-slate-900/40 hover:border-slate-800 transition-all">
+                      <span className="text-slate-300 truncate max-w-[130px] font-medium">{a.entity}</span>
                       <div className="text-right shrink-0">
-                        <span className="font-bold text-rose-400 text-[11px] block">{formatCurrency(a.amount)}</span>
+                        <span className="font-black text-rose-400 text-[11px] block font-mono">{formatCurrency(a.amount)}</span>
                         <span className="text-[9px] text-slate-500">Vence: {a.dueDate}</span>
                       </div>
                     </div>
@@ -1025,21 +1160,155 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Widget: CRM Resumido Funnel */}
+        {/* Widget 3: Flujo de Caja (Cash Flow ledger metrics) */}
+        <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-900 flex flex-col gap-3">
+          <div className="flex items-center justify-between border-b border-slate-850 pb-2.5">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Wallet className="h-4 w-4 text-amber-400" />
+              Flujo de Caja Realizado
+            </h3>
+            <span className="text-[10px] text-slate-500 font-mono font-bold text-indigo-400">Ledger</span>
+          </div>
+
+          <div className="space-y-3 flex-1 justify-center flex flex-col">
+            <div className="p-3 bg-slate-950/50 border border-slate-850 rounded-xl space-y-1.5">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-400 font-medium">Ingresos Registrados:</span>
+                <span className="text-emerald-400 font-bold font-mono">{formatCurrency(cashFlow.inflow)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-400 font-medium">Egresos Registrados:</span>
+                <span className="text-rose-400 font-bold font-mono">{formatCurrency(cashFlow.outflow)}</span>
+              </div>
+              <div className="border-t border-slate-800/80 pt-2 flex justify-between items-center text-xs">
+                <span className="text-slate-300 font-bold">Flujo Neto de Caja:</span>
+                <span className={`font-black font-mono text-[13px] ${cashFlow.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {formatCurrency(cashFlow.net)}
+                </span>
+              </div>
+            </div>
+
+            {/* Quick Flow Visual Indicator */}
+            <div className="bg-slate-950/20 rounded-xl p-2.5 border border-slate-850/40 flex items-center gap-3">
+              <div className={`p-2 rounded-lg shrink-0 ${cashFlow.net >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                {cashFlow.net >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Estado Financiero</p>
+                <p className="text-[10px] text-slate-500 truncate leading-tight mt-0.5">
+                  {cashFlow.net >= 0 
+                    ? 'Superávit operativo. Posición de liquidez robusta para adquisiciones.' 
+                    : 'Déficit operativo temporal. Vigilar vencimientos próximos.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Widget 4: Últimas Ventas */}
+        <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-900 flex flex-col gap-3">
+          <div className="flex items-center justify-between border-b border-slate-850 pb-2.5">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <ArrowUpRight className="h-4 w-4 text-indigo-400" />
+              Últimas Ventas Registradas
+            </h3>
+            <span className="text-[10px] text-slate-500">Últimos cierres</span>
+          </div>
+          <div className="flex flex-col gap-2 flex-1 justify-start">
+            {latestSales.length === 0 ? (
+              <p className="text-xs text-slate-500 text-center py-6">No hay ventas registradas.</p>
+            ) : (
+              latestSales.map(s => (
+                <div key={s.id} className="flex justify-between items-center p-2 rounded-lg bg-slate-950/30 border border-slate-900 hover:border-slate-800 transition-all">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-200 truncate">{s.vehicleLabel}</p>
+                    <p className="text-[10px] text-slate-500 truncate">Cliente: {s.customerLabel}</p>
+                  </div>
+                  <div className="text-right shrink-0 ml-2">
+                    <span className="text-xs font-black text-slate-100 block font-mono">{formatCurrency(s.salePrice)}</span>
+                    <span className="text-[9px] text-emerald-400 font-mono font-semibold">Profit: +{formatCurrency(s.netProfit)}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Widget 5: Últimos Movimientos */}
+        <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-900 flex flex-col gap-3">
+          <div className="flex items-center justify-between border-b border-slate-850 pb-2.5">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Activity className="h-4 w-4 text-amber-500" />
+              Últimos Movimientos de Caja
+            </h3>
+            <span className="text-[10px] text-slate-500">Libro Diario</span>
+          </div>
+          <div className="flex flex-col gap-2 flex-1 justify-start">
+            {latestMovements.length === 0 ? (
+              <p className="text-xs text-slate-500 text-center py-6">No hay movimientos registrados.</p>
+            ) : (
+              latestMovements.map(m => (
+                <div key={m.id} className="flex justify-between items-center p-2 rounded-lg bg-slate-950/30 border border-slate-900 hover:border-slate-800 transition-all">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-200 truncate">{m.category}</p>
+                    <p className="text-[10px] text-slate-500 truncate">{m.date} • {m.paymentMethod}</p>
+                  </div>
+                  <div className="text-right shrink-0 ml-2">
+                    <span className={`text-xs font-black font-mono ${m.type === 'Ingreso' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {m.type === 'Ingreso' ? '+' : '-'}{formatCurrency(m.amount)}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Widget 6: Top Marcas/Modelos por Utilidad */}
+        <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-900 flex flex-col gap-3">
+          <div className="flex items-center justify-between border-b border-slate-850 pb-2.5">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Building className="h-4 w-4 text-indigo-400" />
+              Modelos más Rentables
+            </h3>
+            <span className="text-[10px] text-slate-500">Por Utilidad Real</span>
+          </div>
+          <div className="flex flex-col gap-2 flex-1 justify-start">
+            {topProfitModels.length === 0 ? (
+              <p className="text-xs text-slate-500 text-center py-6">No hay utilidades registradas.</p>
+            ) : (
+              topProfitModels.map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-slate-950/40 border border-slate-900 hover:border-slate-800 transition-all">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[10px] font-black text-indigo-400 bg-indigo-950/50 h-5 w-5 rounded-full flex items-center justify-center border border-indigo-900/40 shrink-0 font-mono">
+                      {idx + 1}
+                    </span>
+                    <span className="text-xs font-bold text-slate-200 truncate">{item.brand} {item.model}</span>
+                  </div>
+                  <div className="text-right shrink-0 ml-2">
+                    <span className="text-xs font-black text-emerald-400 font-mono">{formatCurrency(item.profit)}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Widget 7: CRM Embudo */}
         <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-900 flex flex-col gap-3">
           <div className="flex items-center justify-between border-b border-slate-850 pb-2.5">
             <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
               <Users className="h-4 w-4 text-purple-400" />
               Embudo Comercial CRM
             </h3>
-            <span className="text-[10px] text-slate-500">Leads Totales</span>
+            <span className="text-[10px] text-slate-500">{customers.length} Leads</span>
           </div>
           
           <div className="flex flex-col gap-2 flex-1 justify-center">
             {crmFunnel.reduce((sum, c) => sum + c.count, 0) === 0 ? (
               <p className="text-xs text-slate-500 text-center py-6">No hay clientes en el CRM.</p>
             ) : (
-              crmFunnel.map((item, idx) => {
+              crmFunnel.map((item) => {
                 const totalLeads = customers.length;
                 const pct = totalLeads > 0 ? (item.count / totalLeads) * 100 : 0;
                 const statusColors: Record<string, string> = {
@@ -1053,9 +1322,9 @@ export default function Dashboard() {
                   <div key={item.status} className="space-y-1">
                     <div className="flex justify-between text-[11px]">
                       <span className="text-slate-300 font-medium">{item.status}</span>
-                      <span className="text-slate-500">{item.count} leads ({pct.toFixed(0)}%)</span>
+                      <span className="text-slate-500 font-mono text-[10px]">{item.count} leads ({pct.toFixed(0)}%)</span>
                     </div>
-                    <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden">
+                    <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden">
                       <div className={`h-full ${statusColors[item.status] || 'bg-slate-500'}`} style={{ width: `${pct}%` }}></div>
                     </div>
                   </div>
@@ -1065,37 +1334,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Widget: Top Selling Brands by Utility */}
-        <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-900 flex flex-col gap-3">
-          <div className="flex items-center justify-between border-b border-slate-850 pb-2.5">
-            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-              <Building className="h-4 w-4 text-indigo-400" />
-              Marcas más Rentables
-            </h3>
-            <span className="text-[10px] text-slate-500">Por Utilidad Real</span>
-          </div>
-          <div className="flex flex-col gap-2.5 flex-1 justify-start">
-            {topProfitBrands.length === 0 ? (
-              <p className="text-xs text-slate-500 text-center py-6">No hay registro de ventas con utilidad.</p>
-            ) : (
-              topProfitBrands.map((b, i) => (
-                <div key={b.brand} className="flex items-center justify-between p-2 rounded-lg bg-slate-950/40 border border-slate-900">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="text-[10px] font-bold text-indigo-400 bg-indigo-950/50 h-5 w-5 rounded-full flex items-center justify-center border border-indigo-900/40 shrink-0">
-                      {i + 1}
-                    </span>
-                    <span className="text-xs font-semibold text-slate-200 truncate">{b.brand}</span>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-[11px] font-black text-emerald-400">{formatCurrency(b.profit)}</span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Widget: Alertas Operativas */}
+        {/* Widget 8: Alertas Operativas */}
         <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-900 flex flex-col gap-3 col-span-1 md:col-span-2">
           <div className="flex items-center justify-between border-b border-slate-850 pb-2.5">
             <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
