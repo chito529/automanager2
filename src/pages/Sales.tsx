@@ -41,6 +41,13 @@ export default function Sales() {
   const [tradeInDocumentation, setTradeInDocumentation] = useState('Título, Cédula Verde, Contrato de Compraventa');
   const [tradeInStatus, setTradeInStatus] = useState<VehicleStatus>('Comprado');
 
+  // Financing State
+  const [isFinanced, setIsFinanced] = useState(false);
+  const [installments, setInstallments] = useState(1);
+  const [firstDueDate, setFirstDueDate] = useState('');
+  const [installmentFrequency, setInstallmentFrequency] = useState<'Mensual' | 'Quincenal' | 'Semanal'>('Mensual');
+  const [installmentAmount, setInstallmentAmount] = useState<number>(0);
+
   useEffect(() => {
     loadData();
     const params = new URLSearchParams(window.location.search);
@@ -88,6 +95,15 @@ export default function Sales() {
     setTradeInDocumentation('Título, Cédula Verde, Contrato de Compraventa');
     setTradeInStatus('Comprado');
     
+    // Financing resets
+    setIsFinanced(false);
+    setInstallments(1);
+    const defaultDate = new Date();
+    defaultDate.setMonth(defaultDate.getMonth() + 1);
+    setFirstDueDate(defaultDate.toISOString().split('T')[0]);
+    setInstallmentFrequency('Mensual');
+    setInstallmentAmount(0);
+    
     setIsModalOpen(true);
   };
 
@@ -106,6 +122,15 @@ export default function Sales() {
   const purchasePrice = selectedVehicle ? selectedVehicle.purchasePrice : 0;
   const projectedProfit = selectedVehicle ? (salePrice - purchasePrice - commission) : 0;
   const pendingBalance = Math.max(0, salePrice - downPayment - (hasTradeIn ? tradeInValuation : 0));
+
+  useEffect(() => {
+    setIsFinanced(pendingBalance > 0);
+    if (pendingBalance > 0 && installments > 0) {
+      setInstallmentAmount(Math.round(pendingBalance / installments));
+    } else {
+      setInstallmentAmount(0);
+    }
+  }, [pendingBalance, installments]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,7 +178,7 @@ export default function Sales() {
       }
 
       // 2. Create the sale with the tradeInVehicleId if applicable
-      const payload = {
+      const payload: any = {
         date,
         vehicleId: selectedVehicleId,
         customerId: selectedCustomerId,
@@ -177,6 +202,15 @@ export default function Sales() {
         } : {})
       };
 
+      if (isFinanced && pendingBalance > 0) {
+        payload.financingPlan = {
+          installments: Number(installments),
+          frequency: installmentFrequency,
+          firstDueDate,
+          installmentAmount: Number(installmentAmount)
+        };
+      }
+
       const saleId = await api.sales.create(payload);
 
       // 3. Link the trade-in vehicle back to the created sale ID
@@ -191,6 +225,35 @@ export default function Sales() {
         status: 'Vendido',
         salePrice: Number(salePrice)
       });
+
+      // 5. Generate Accounts Receivable (Cuentas por Cobrar) if financed
+      if (isFinanced && pendingBalance > 0 && selectedCustomer && selectedVehicle) {
+        let currentDate = new Date(firstDueDate);
+        
+        for (let i = 1; i <= installments; i++) {
+          await api.accounts.create({
+            type: 'Cobrar',
+            entity: selectedCustomer.name,
+            amount: Number(installmentAmount),
+            paidAmount: 0,
+            dueDate: currentDate.toISOString().split('T')[0],
+            status: 'Pendiente',
+            description: `Cuota ${i}/${installments} - ${selectedVehicle.brand} ${selectedVehicle.model}`,
+            saleId: saleId,
+            installmentNumber: i,
+            totalInstallments: installments
+          });
+
+          // Advance date for the next installment
+          if (installmentFrequency === 'Mensual') {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+          } else if (installmentFrequency === 'Quincenal') {
+            currentDate.setDate(currentDate.getDate() + 15);
+          } else if (installmentFrequency === 'Semanal') {
+            currentDate.setDate(currentDate.getDate() + 7);
+          }
+        }
+      }
 
       setIsModalOpen(false);
       await loadData();
@@ -225,6 +288,13 @@ export default function Sales() {
       // If there was a trade-in vehicle, delete it
       if (tradeInVehicleId) {
         await api.vehicles.delete(tradeInVehicleId);
+      }
+
+      // Find and delete any accounts associated with this sale
+      const accounts = await api.accounts.list();
+      const associatedAccounts = accounts.filter(acc => acc.saleId === saleId);
+      for (const acc of associatedAccounts) {
+        await api.accounts.delete(acc.id);
       }
 
       await loadData();
@@ -361,6 +431,11 @@ export default function Sales() {
                         Recibido: {s.tradeInBrand} {s.tradeInModel} ({s.tradeInYear}) • {formatCurrency(s.tradeInValuation || 0)}
                       </div>
                     )}
+                    {s.financingPlan && (
+                      <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-950/40 border border-amber-900/30 text-[11px] text-amber-400 font-semibold ml-2">
+                        Financiado: {s.financingPlan.installments} cuotas de {formatCurrency(s.financingPlan.installmentAmount)}
+                      </div>
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-200 font-semibold text-right font-mono">{formatCurrency(s.salePrice)}</td>
                   <td className="whitespace-nowrap px-3 py-4 text-sm text-right font-mono">
@@ -411,6 +486,12 @@ export default function Sales() {
                     <div className="mt-2 p-2 bg-indigo-950/20 border border-indigo-900/30 rounded-lg text-xs text-slate-300">
                       <span className="block text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-0.5">Parte de Pago</span>
                       {s.tradeInBrand} {s.tradeInModel} ({s.tradeInYear}) • <span className="font-semibold text-indigo-300">{formatCurrency(s.tradeInValuation || 0)}</span>
+                    </div>
+                  )}
+                  {s.financingPlan && (
+                    <div className="mt-2 p-2 bg-amber-950/20 border border-amber-900/30 rounded-lg text-xs text-slate-300">
+                      <span className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-0.5">Financiación</span>
+                      {s.financingPlan.installments} cuotas de <span className="font-semibold text-amber-300">{formatCurrency(s.financingPlan.installmentAmount)}</span>
                     </div>
                   )}
                 </div>
@@ -677,6 +758,69 @@ export default function Sales() {
                         onChange={(e) => setTradeInDocumentation(e.target.value)}
                         placeholder="Título, Cédula Verde..."
                         className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-200 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Sección: Plan de Financiación (Auto-calculated) */}
+              {isFinanced && pendingBalance > 0 && (
+                <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-850 space-y-4 animate-in slide-in-from-top-2 duration-200 mt-4">
+                  <div className="border-b border-slate-850 pb-1.5 flex items-center justify-between">
+                    <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Plan de Financiación</p>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950/30 text-amber-400 border border-amber-900/40">
+                      Generará {installments} cuota(s)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Cantidad de Cuotas *</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="120"
+                        required
+                        value={installments || ''}
+                        onChange={(e) => setInstallments(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-200 text-sm focus:outline-none focus:border-amber-500 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Frecuencia *</label>
+                      <select
+                        value={installmentFrequency}
+                        onChange={(e) => setInstallmentFrequency(e.target.value as 'Mensual' | 'Quincenal' | 'Semanal')}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-200 text-sm focus:outline-none focus:border-amber-500 transition-colors"
+                      >
+                        <option value="Mensual">Mensual</option>
+                        <option value="Quincenal">Quincenal</option>
+                        <option value="Semanal">Semanal</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">1er Vencimiento *</label>
+                      <input
+                        type="date"
+                        required
+                        value={firstDueDate}
+                        onChange={(e) => setFirstDueDate(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-200 text-sm focus:outline-none focus:border-amber-500 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Monto por Cuota (USD) *</label>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        value={installmentAmount || ''}
+                        onChange={(e) => setInstallmentAmount(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-200 text-sm focus:outline-none focus:border-amber-500 transition-colors"
                       />
                     </div>
                   </div>

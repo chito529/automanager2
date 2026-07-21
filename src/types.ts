@@ -75,6 +75,12 @@ export interface Sale {
   tradeInDocumentation?: string;
   tradeInStatus?: VehicleStatus;
   tradeInVehicleId?: string;
+  financingPlan?: {
+    installments: number;
+    frequency: 'Mensual' | 'Quincenal' | 'Semanal';
+    firstDueDate: string;
+    installmentAmount: number;
+  };
 }
 
 export interface Transaction {
@@ -87,13 +93,20 @@ export interface Transaction {
   vehicleId?: string;
 }
 
+export type AccountStatus = 'Pendiente' | 'Pagado' | 'Vencido' | 'Parcial' | 'Refinanciado';
+
 export interface Account {
   id: string;
   type: 'Cobrar' | 'Pagar';
   entity: string;
   amount: number;
+  paidAmount?: number;
   dueDate: string;
-  status: 'Pendiente' | 'Pagado';
+  status: AccountStatus;
+  description?: string;
+  saleId?: string;
+  installmentNumber?: number;
+  totalInstallments?: number;
 }
 
 export interface User {

@@ -768,7 +768,7 @@ export const api = {
       const result = await response.json();
       return result.id || result.data?.id || result.insertedId || String(result);
     },
-    updateStatus: async (id: string, status: 'Pendiente' | 'Pagado'): Promise<void> => {
+    updateStatus: async (id: string, status: import('../types').AccountStatus): Promise<void> => {
       if (await ensureFallbackChecked()) {
         const list = safeGetLocalStorageList<Account>(LOCAL_STORAGE_KEYS.accounts);
         const index = list.findIndex((a: any) => a.id.toString() === id.toString());
@@ -783,6 +783,22 @@ export const api = {
         body: JSON.stringify({ status }),
       });
       if (!response.ok) await handleResponseError(response, 'Failed to update account status');
+    },
+    update: async (id: string, data: Partial<Account>): Promise<void> => {
+      if (await ensureFallbackChecked()) {
+        const list = safeGetLocalStorageList<Account>(LOCAL_STORAGE_KEYS.accounts);
+        const index = list.findIndex((a: any) => a.id.toString() === id.toString());
+        if (index !== -1) {
+          list[index] = { ...list[index], ...data };
+          safeStorage.setItem(LOCAL_STORAGE_KEYS.accounts, JSON.stringify(list));
+        }
+        return;
+      }
+      const response = await apiRequest(`/api/accounts/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) await handleResponseError(response, 'Failed to update account');
     },
     delete: async (id: string): Promise<void> => {
       if (await ensureFallbackChecked()) {
